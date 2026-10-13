@@ -3,6 +3,15 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 import asyncio
+import os
+import psutil
+import time
+
+# Temporary edit states
+edit_states = {}
+
+# Track bot start time
+BOT_START_TIME = time.time()
 
 
 # ==========================================================
@@ -52,7 +61,7 @@ async def clone_start(client: Client, message: Message):
             await message.reply_text("❌ Invalid or expired link.")
             return
 
-    # Load custom start text/pic/buttons from DB
+    # Custom start text/pic/buttons
     clone_data = await db.get_clone_by_username(bot_username)
     start_text = clone_data.get("start_text") if clone_data else None
     start_pic = clone_data.get("start_pic") if clone_data else None
@@ -71,7 +80,6 @@ async def clone_start(client: Client, message: Message):
     except Exception:
         formatted_text = start_text
 
-    # Build keyboard
     keyboard = []
     for btn in start_buttons:
         keyboard.append([InlineKeyboardButton(btn["text"], url=btn["url"])])
@@ -226,16 +234,16 @@ async def send_clone_settings(message, edit=False):
         "✨ Click a button below to modify settings, welcome message, and features."
     )
     buttons = [
-        [InlineKeyboardButton("💰 MONETIZATION", callback_data="c_monetization")],
-        [InlineKeyboardButton("📝 START MESSAGE", callback_data="c_start_msg")],
-        [InlineKeyboardButton("📢 LOG CHANNEL", callback_data="c_log_channel")],
-        [InlineKeyboardButton("☁️ DATABASE CHANNEL", callback_data="c_db_channel")],
-        [InlineKeyboardButton("👥 ADMINS", callback_data="c_admins")],
-        [InlineKeyboardButton("📊 BOT STATUS", callback_data="c_status")],
-        [InlineKeyboardButton("🛍️ BOT MODE", callback_data="c_bot_mode")],
-        [InlineKeyboardButton("⏱️ RESTART BOT", callback_data="c_restart")],
-        [InlineKeyboardButton("🚫 DELETE BOT", callback_data="c_delete_bot")],
-        [InlineKeyboardButton("🔍 MORE FEATURES", callback_data="c_more_features")],
+        [InlineKeyboardButton("💰 MONETIZATION", callback_data="c_monetization"),
+         InlineKeyboardButton("📝 START MESSAGE", callback_data="c_start_msg")],
+        [InlineKeyboardButton("📢 LOG CHANNEL", callback_data="c_log_channel"),
+         InlineKeyboardButton("☁️ DATABASE CHANNEL", callback_data="c_db_channel")],
+        [InlineKeyboardButton("👥 ADMINS", callback_data="c_admins"),
+         InlineKeyboardButton("📊 BOT STATUS", callback_data="c_status")],
+        [InlineKeyboardButton("🛍️ BOT MODE", callback_data="c_bot_mode"),
+         InlineKeyboardButton("⏱️ RESTART BOT", callback_data="c_restart")],
+        [InlineKeyboardButton("🚫 DELETE BOT", callback_data="c_delete_bot"),
+         InlineKeyboardButton("🔍 MORE FEATURES", callback_data="c_more_features")],
         [InlineKeyboardButton("🔙 BACK", callback_data="c_back")]
     ]
     if edit:
@@ -245,24 +253,414 @@ async def send_clone_settings(message, edit=False):
 
 
 # ==========================================================
-# 🔹 GENERIC SETTINGS BUTTON HANDLER
-# ⚠️ NOTE: monetization and start_msg are REMOVED from this regex
-# They are handled in clone_monetization.py and clone_startmsg.py
+# 🔹 LOG CHANNEL
 # ==========================================================
-@Client.on_callback_query(filters.regex("^c_(log_channel|db_channel|admins|status|bot_mode|restart|delete_bot|more_features)$"))
-async def settings_button_handler(client: Client, callback_query: CallbackQuery):
-    key = callback_query.data.replace("c_", "")
-    messages = {
-        "log_channel": "📢 LOG CHANNEL\n\nForward a message from your log channel.",
-        "db_channel": "☁️ DATABASE CHANNEL\n\nForward a message from your DB channel.",
-        "admins": "👥 ADMINS\n\nSend me user IDs (one per line) to promote.",
-        "status": "📊 BOT STATUS\n\nYour clone bot is running normally.",
-        "bot_mode": "🛍️ BOT MODE\n\nChoose: Public / Private / Approval.",
-        "restart": "⏱️ RESTART BOT\n\nSend /restart_confirm to restart.",
-        "delete_bot": "🚫 DELETE BOT\n\nSend /delete_confirm to permanently delete.",
-        "more_features": "🔍 MORE FEATURES\n\nComing soon!"
-    }
-    await callback_query.answer(messages.get(key, "Coming soon"), show_alert=True)
+@Client.on_callback_query(filters.regex("^c_log_channel$"))
+async def log_channel_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    log_channel = clone_data.get("log_channel") if clone_data else None
+
+    if log_channel:
+        text = (
+            "📢 **LOG CHANNEL:**\n\n"
+            "ᴡʜᴀᴛ ɪs ʟᴏɢ ᴄʜᴀɴɴᴇʟ ??\n\n"
+            "ɪꜰ ɴᴇᴡ ᴜsᴇʀs sᴛᴀʀᴛ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ ᴛʜᴇɴ ʙᴏᴛ ɴᴏᴛɪꜰɪᴇs ʏᴏᴜ.\n\n"
+            f"✅ **Current Log Channel:** `{log_channel}`"
+        )
+    else:
+        text = (
+            "📢 **LOG CHANNEL:**\n\n"
+            "ᴡʜᴀᴛ ɪs ʟᴏɢ ᴄʜᴀɴɴᴇʟ ??\n\n"
+            "ɪꜰ ɴᴇᴡ ᴜsᴇʀs sᴛᴀʀᴛ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ ᴛʜᴇɴ ʙᴏᴛ ɴᴏᴛɪꜰɪᴇs ʏᴏᴜ.\n\n"
+            "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ʟᴏɢ ᴄʜᴀɴɴᴇʟ❗️"
+        )
+
+    buttons = [
+        [InlineKeyboardButton("Set Log Channel", callback_data="c_set_log")],
+        [InlineKeyboardButton("Delete Channel", callback_data="c_delete_log")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_set_log$"))
+async def set_log_channel(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    edit_states[user_id] = "waiting_for_log_channel"
+    bot_username = (await client.get_me()).username
+
+    text = (
+        "ꜰᴏʀᴡᴀʀᴅ ʟᴏɢ ᴄʜᴀɴɴᴇʟ ᴀɴʏ ᴍᴇssᴀɢᴇ ᴛᴏ ᴍᴇ,\n"
+        f"ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ.\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private, group=21)
+async def receive_log_channel(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_log_channel":
+        return
+
+    if not message.forward_from_chat:
+        return await message.reply_text("⚠️ Please forward a message from your log channel.")
+
+    chat = message.forward_from_chat
+    if chat.type not in ("channel", "supergroup"):
+        return await message.reply_text("⚠️ Only channels/supergroups are allowed.")
+
+    edit_states.pop(user_id, None)
+
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "log_channel", chat.id)
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+    await message.reply_text(
+        f"✅ **Log Channel Set:** {chat.title}\n\n"
+        "All future user events will be logged here.",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+@Client.on_callback_query(filters.regex("^c_delete_log$"))
+async def delete_log_channel(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "log_channel", None)
+
+    await callback_query.answer("✅ Log channel deleted.", show_alert=True)
+    await log_channel_menu(client, callback_query)
+
+
+# ==========================================================
+# 🔹 DATABASE CHANNEL
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_db_channel$"))
+async def db_channel_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    db_channel = clone_data.get("db_channel") if clone_data else None
+
+    if db_channel:
+        text = (
+            "☁️ **DATABASE CHANNEL:**\n\n"
+            "ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴛᴏʀᴇs ᴀʟʟ ʏᴏᴜʀ ꜰɪʟᴇs.\n\n"
+            f"✅ **Current DB Channel:** `{db_channel}`"
+        )
+    else:
+        text = (
+            "☁️ **DATABASE CHANNEL:**\n\n"
+            "ᴛʜɪs ᴄʜᴀɴɴᴇʟ sᴛᴏʀᴇs ᴀʟʟ ʏᴏᴜʀ ꜰɪʟᴇs.\n\n"
+            "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ❗️"
+        )
+
+    buttons = [
+        [InlineKeyboardButton("Set Database Channel", callback_data="c_set_db")],
+        [InlineKeyboardButton("Delete Channel", callback_data="c_delete_db")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_set_db$"))
+async def set_db_channel(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    edit_states[user_id] = "waiting_for_db_channel"
+    bot_username = (await client.get_me()).username
+
+    text = (
+        "ꜰᴏʀᴡᴀʀᴅ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ ᴀɴʏ ᴍᴇssᴀɢᴇ ᴛᴏ ᴍᴇ,\n"
+        f"ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ.\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private, group=22)
+async def receive_db_channel(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_db_channel":
+        return
+
+    if not message.forward_from_chat:
+        return await message.reply_text("⚠️ Please forward a message from your DB channel.")
+
+    chat = message.forward_from_chat
+    if chat.type not in ("channel", "supergroup"):
+        return await message.reply_text("⚠️ Only channels/supergroups are allowed.")
+
+    edit_states.pop(user_id, None)
+
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "db_channel", chat.id)
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+    await message.reply_text(
+        f"✅ **Database Channel Set:** {chat.title}",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+@Client.on_callback_query(filters.regex("^c_delete_db$"))
+async def delete_db_channel(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "db_channel", None)
+
+    await callback_query.answer("✅ Database channel deleted.", show_alert=True)
+    await db_channel_menu(client, callback_query)
+
+
+# ==========================================================
+# 🔹 ADMINS
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_admins$"))
+async def admins_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    admins = clone_data.get("admins", []) if clone_data else []
+
+    text = (
+        "👥 **ADMINS:**\n\n"
+        "ᴀᴅᴍɪɴs ᴄᴀɴ sᴛᴏʀᴇ ꜰɪʟᴇs ᴀɴᴅ ɢᴇɴᴇʀᴀᴛᴇ ʟɪɴᴋs ᴡɪᴛʜᴏᴜᴛ ʟɪᴍɪᴛs.\n\n"
+        f"👤 **Total Admins:** {len(admins)}"
+    )
+
+    buttons = [
+        [InlineKeyboardButton("Add Admin", callback_data="c_add_admin"),
+         InlineKeyboardButton("Remove Admin", callback_data="c_remove_admin")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_add_admin$"))
+async def add_admin_prompt(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    edit_states[user_id] = "waiting_for_add_admin"
+
+    text = (
+        "👥 **ADD ADMIN**\n\n"
+        "ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ᴛʜᴇ ᴜsᴇʀ ᴏʀ sᴇɴᴅ ᴛʜᴇɪʀ ᴜsᴇʀ ɪᴅ.\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=23)
+async def receive_add_admin(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_add_admin":
+        return
+
+    try:
+        new_admin = int(message.text.strip())
+    except ValueError:
+        return await message.reply_text("❌ Invalid user ID.")
+
+    edit_states.pop(user_id, None)
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        admins = clone_data.get("admins", [])
+        if new_admin not in admins:
+            admins.append(new_admin)
+            await db.update_clone_setting(clone_data["user_id"], "admins", admins)
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+    await message.reply_text(f"✅ Admin {new_admin} added.", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_remove_admin$"))
+async def remove_admin_prompt(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    edit_states[user_id] = "waiting_for_remove_admin"
+
+    text = (
+        "👥 **REMOVE ADMIN**\n\n"
+        "ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ᴛʜᴇ ᴜsᴇʀ ᴏʀ sᴇɴᴅ ᴛʜᴇɪʀ ᴜsᴇʀ ɪᴅ.\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=24)
+async def receive_remove_admin(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_remove_admin":
+        return
+
+    try:
+        rem_admin = int(message.text.strip())
+    except ValueError:
+        return await message.reply_text("❌ Invalid user ID.")
+
+    edit_states.pop(user_id, None)
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        admins = clone_data.get("admins", [])
+        if rem_admin in admins:
+            admins.remove(rem_admin)
+            await db.update_clone_setting(clone_data["user_id"], "admins", admins)
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+    await message.reply_text(f"✅ Admin {rem_admin} removed.", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 BOT STATUS
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_status$"))
+async def bot_status(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    total_users = await db.users.count_documents({})
+    banned_users = await db.banned_users.count_documents({})
+
+    cpu = psutil.cpu_percent(interval=0.5)
+    ram = psutil.virtual_memory().percent
+
+    uptime_seconds = int(time.time() - BOT_START_TIME)
+    hours = uptime_seconds // 3600
+    minutes = (uptime_seconds % 3600) // 60
+    seconds = uptime_seconds % 60
+
+    text = (
+        f"**{bot_username.upper()}**\n\n"
+        f"**USERS** - {total_users}\n\n"
+        f"**BAN USERS** - {banned_users}\n\n"
+        f"**CPU** - {cpu}%\n\n"
+        f"**RAM** - {ram}%\n\n"
+        f"**UPTIME** - {hours} Hours {minutes} Minutes {seconds} Seconds"
+    )
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 BOT MODE
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_bot_mode$"))
+async def bot_mode_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    current_mode = clone_data.get("bot_mode", "public") if clone_data else "public"
+    mode_icon = "🌐" if current_mode == "public" else "🔒"
+
+    text = (
+        "🛍️ **BOT MODE:**\n\n"
+        f"{mode_icon} **Current Mode:** {current_mode.title()}\n\n"
+        "• **Public** - Anyone can use the bot\n"
+        "• **Private** - Only admins can use the bot"
+    )
+
+    buttons = [
+        [InlineKeyboardButton("🌐 Public", callback_data="c_mode_public"),
+         InlineKeyboardButton("🔒 Private", callback_data="c_mode_private")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_mode_(public|private)$"))
+async def set_bot_mode(client: Client, callback_query: CallbackQuery):
+    mode = callback_query.data.split("_")[-1]
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "bot_mode", mode)
+
+    await callback_query.answer(f"Mode set to {mode.title()} ✅", show_alert=True)
+    await bot_mode_menu(client, callback_query)
+
+
+# ==========================================================
+# 🔹 RESTART BOT
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_restart$"))
+async def restart_bot(client: Client, callback_query: CallbackQuery):
+    await callback_query.answer("⏱️ Restarting clone bot...", show_alert=True)
+    await asyncio.sleep(2)
+    # Gracefully restart the clone bot's client
+    await client.restart()
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
+    await callback_query.message.edit_text("✅ Bot restarted successfully!", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 DELETE BOT
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_delete_bot$"))
+async def delete_bot_prompt(client: Client, callback_query: CallbackQuery):
+    text = (
+        "🚫 **DELETE BOT**\n\n"
+        "Are you sure? This will permanently delete your clone bot and all its data.\n\n"
+        "This action cannot be undone."
+    )
+    buttons = [
+        [InlineKeyboardButton("❌ Cancel", callback_data="c_settings"),
+         InlineKeyboardButton("🚫 Delete", callback_data="c_confirm_delete_bot")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_confirm_delete_bot$"))
+async def confirm_delete_bot(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+
+    if clone_data:
+        await db.delete_clone(clone_data["user_id"])
+
+    await callback_query.message.edit_text(
+        "✅ **Bot deleted.**\n\n"
+        "You can now create a new clone from the main bot with /clone."
+    )
+
+
+# ==========================================================
+# 🔹 MORE FEATURES
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_more_features$"))
+async def more_features(client: Client, callback_query: CallbackQuery):
+    text = (
+        "🔍 **MORE FEATURES**\n\n"
+        "Here are the settings command features:\n\n"
+        "• `/settings` - Open this menu\n"
+        "• `/broadcast` - Send a message to all users\n"
+        "• `/ban [user_id]` - Ban a user\n"
+        "• `/unban [user_id]` - Unban a user\n"
+        "• `/createcode [days]` - Generate premium codes\n"
+        "• `/myplan` - View your premium plan\n"
+        "• `/link` - Store a file\n"
+        "• `/batch` - Store multiple files"
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
@@ -270,7 +668,6 @@ async def settings_button_handler(client: Client, callback_query: CallbackQuery)
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_back$"))
 async def clone_back_cb(client: Client, callback_query: CallbackQuery):
-    first_name = callback_query.from_user.first_name
     bot_username = (await client.get_me()).username
     bot_mention = f"@{bot_username}"
     user_mention = callback_query.from_user.mention
@@ -306,6 +703,18 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
         ]
 
     await callback_query.message.edit_text(formatted, reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==========================================================
+# 🔹 CANCEL
+# ==========================================================
+@Client.on_message(filters.command("cancel") & filters.private, group=25)
+async def cancel_clone_edit(client: Client, message: Message):
+    user_id = message.from_user.id
+    if user_id in edit_states:
+        edit_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
+        await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
