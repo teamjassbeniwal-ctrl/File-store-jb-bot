@@ -164,3 +164,104 @@ async def verify_time_set(client: Client, callback_query: CallbackQuery):
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="cv_verify_time")]]
     await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+# ==========================================================
+# 🔹 RECEIVE INPUT
+# ==========================================================
+@Client.on_message(
+    filters.private & filters.text & ~filters.command(
+        ["cancel", "start", "help", "settings", "customize", "link", "batch", "plan", "myplan"]
+    ),
+    group=70
+)
+async def verify_receive_input(client: Client, message: Message):
+    user_id = message.from_user.id
+    state = vv_states.get(user_id)
+    if not state:
+        return
+
+    bot_username = (await client.get_me()).username
+    text = message.text.strip()
+
+    # --- Shortlink URL ---
+    if state == "waiting_verify_sl_url":
+        if not (text.startswith("http://") or text.startswith("https://")):
+            text = "https://" + text
+        text = text.rstrip("/")
+        vv_states[user_id] = {"state": "waiting_verify_sl_api", "url": text}
+        return await message.reply_text("sᴇɴᴅ ᴍᴇ ᴀᴘɪ ᴋᴇʏ...")
+
+    # --- Shortlink API ---
+    if isinstance(state, dict) and state.get("state") == "waiting_verify_sl_api":
+        await db.set_verify_shortlink_url(bot_username, state["url"])
+        await db.set_verify_shortlink_api(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="cv_verify_sl")]]
+        return await message.reply_text(
+            "sᴜᴄᴄᴇssꜰᴜʟʟʏ sᴇᴛ sʜᴏʀᴛʟɪɴᴋ ✅",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    # --- Tutorial ---
+    if state == "waiting_verify_tt":
+        await db.set_verify_tutorial(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="cv_verify_tt")]]
+        return await message.reply_text(
+            "✅ Tutorial link saved.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    # --- Time ---
+    if state == "waiting_verify_time":
+        if not (text.endswith("m") or text.endswith("h")):
+            return await message.reply_text("❌ Invalid format. Use 15m or 1h.")
+        await db.set_verify_time(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="cv_verify_time")]]
+        return await message.reply_text(
+            f"✅ Time set to {text}",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+
+# ==========================================================
+# 🔹 TOGGLE ON/OFF
+# ==========================================================
+@Client.on_callback_query(filters.regex("^cv_toggle$"))
+async def verify_toggle(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    current = await db.get_verify_status(bot_username)
+
+    if not current:
+        url = await db.get_verify_shortlink_url(bot_username)
+        api = await db.get_verify_shortlink_api(bot_username)
+        if not url or not api:
+            return await callback_query.answer(
+                "⚠️ Set Verify Shortlink first.", show_alert=True
+            )
+
+    await db.set_verify_status(bot_username, not current)
+    await callback_query.answer(
+        f"Verification {'ON ✅' if not current else 'OFF ❌'}", show_alert=True
+    )
+    await token_verify_menu(client, callback_query)
+
+
+# ==========================================================
+# 🔹 SECOND / THIRD PLACEHOLDERS
+# ==========================================================
+@Client.on_callback_query(filters.regex("^cv_second$"))
+async def cv_second(client: Client, callback_query: CallbackQuery):
+    await callback_query.answer(
+        "Second verification — duplicate the same setup with prefix 'cv2_'.",
+        show_alert=True
+    )
+
+
+@Client.on_callback_query(filters.regex("^cv_third$"))
+async def cv_third(client: Client, callback_query: CallbackQuery):
+    await callback_query.answer(
+        "Third verification — same pattern.",
+        show_alert=True
+    )
