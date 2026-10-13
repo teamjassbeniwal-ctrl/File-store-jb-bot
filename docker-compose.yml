@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  file-store-bot:
+    build: .
+    container_name: file_store_bot
+    restart: unless-stopped
+    environment:
+      # Replace these with your actual values
+      - API_ID=123456
+      - API_HASH=your_api_hash_here
+      - BOT_TOKEN=your_main_bot_token_here
+      - DB_URL=mongodb://mongo:27017
+      - DB_NAME=FileStoreBot
+      - OWNER_ID=123456789
+      - FORCE_SUB_CHANNEL=-100123456789
+    volumes:
+      # Optional: Mounts the session files so they persist across restarts
+      - ./sessions:/app/sessions
+    depends_on:
+      - mongo
+
+  # Optional: Local MongoDB Database (If you don't use MongoDB Atlas)
+  mongo:
+    image: mongo:latest
+    container_name: file_store_db
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
