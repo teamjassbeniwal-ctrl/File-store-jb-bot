@@ -4,6 +4,7 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 from utils.shortener import shorten_url
 from utils.verify_helper import needs_verification, mark_verified
+from utils.fsub_helper import check_subscription, build_fsub_keyboard
 import base64
 import time
 
@@ -99,7 +100,33 @@ async def handle_link_file(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # Verification gate
+    # ==========================================================
+    # 🔹 FORCE SUBSCRIBE GATE
+    # ==========================================================
+    fsub_status = await db.get_fsub_status(bot_username)
+    if fsub_status:
+        not_joined = await check_subscription(client, user_id, bot_username)
+        if not_joined:
+            fsub_text = await db.get_fsub_text(bot_username)
+            fsub_img = await db.get_fsub_image(bot_username)
+            keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
+
+            default_text = (
+                "📢 **Please Join Our Channels**\n\n"
+                "To use this bot, you must join the channels below.\n"
+                "After joining, click **✅ I Joined**."
+            )
+            msg_text = fsub_text or default_text
+
+            if fsub_img:
+                await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
+            else:
+                await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
+            return
+
+    # ==========================================================
+    # 🔹 VERIFICATION GATE
+    # ==========================================================
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
@@ -119,17 +146,15 @@ async def handle_link_file(client: Client, message: Message):
             f"ʜᴇʏ {message.from_user.first_name}\n\n"
             "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
             "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
-            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ 😊.\n\n"
-            "इस बॉट को इस्तेमाल करने के लिए आपको रोजाना 2 बार verify करना "
-            "होगा नहीं तो आप इसका इस्तेमाल नहीं कर पाएंगे |\n\n"
-            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2\n\n"
-            "ɪꜰ ʏᴏᴜ ᴡᴀɴᴛ ᴅɪʀᴇᴄᴛ ꜰɪʟᴇs ᴛʜᴇɴ ʏᴏᴜ ᴄᴀɴ ᴛᴀᴋᴇ ᴘʀᴇᴍɪᴜᴍ "
-            "sᴇʀᴠɪᴄᴇ (ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴠᴇʀɪғʏ)\n\n"
-            "ꜰᴏʀ ᴍᴏʀᴇ ᴅᴇᴛᴀɪʟs /plan & /refer",
+            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ 😊.\n\n"
+            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
 
+    # ==========================================================
+    # 🔹 FILE PROCESSING
+    # ==========================================================
     file_id = None
     if message.document:
         file_id = message.document.file_id
@@ -237,7 +262,33 @@ async def handle_batch_count(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # Verification gate
+    # ==========================================================
+    # 🔹 FORCE SUBSCRIBE GATE
+    # ==========================================================
+    fsub_status = await db.get_fsub_status(bot_username)
+    if fsub_status:
+        not_joined = await check_subscription(client, user_id, bot_username)
+        if not_joined:
+            fsub_text = await db.get_fsub_text(bot_username)
+            fsub_img = await db.get_fsub_image(bot_username)
+            keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
+
+            default_text = (
+                "📢 **Please Join Our Channels**\n\n"
+                "To use this bot, you must join the channels below.\n"
+                "After joining, click **✅ I Joined**."
+            )
+            msg_text = fsub_text or default_text
+
+            if fsub_img:
+                await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
+            else:
+                await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
+            return
+
+    # ==========================================================
+    # 🔹 VERIFICATION GATE
+    # ==========================================================
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
@@ -255,13 +306,14 @@ async def handle_batch_count(client: Client, message: Message):
         return await message.reply_text(
             f"ʜᴇʏ {message.from_user.first_name}\n\n"
             "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
-            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
-            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ 😊.\n\n"
             "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
 
+    # ==========================================================
+    # 🔹 BATCH PROCESSING
+    # ==========================================================
     from_chat_id = state["from_chat_id"]
     start_id = state["start_id"]
     user_states.pop(user_id, None)
@@ -294,18 +346,15 @@ async def handle_batch_count(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 VERIFICATION CALLBACK (from verify shortlink click)
+# 🔹 VERIFICATION CALLBACK
 # ==========================================================
 @Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
 async def handle_verify_callback(client: Client, message: Message):
     user_id = int(message.matches[0].group(1))
     bot_username = (await client.get_me()).username
-
     await mark_verified(user_id, bot_username)
-
     await message.reply_text(
-        "✅ **Verification Complete!**\n\n"
-        "Now you can download files."
+        "✅ **Verification Complete!**\n\nNow you can download files."
     )
 
 
