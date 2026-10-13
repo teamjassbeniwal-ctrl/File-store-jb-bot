@@ -87,21 +87,42 @@ async def fsub_receive_channel(client: Client, message: Message):
     chat = message.forward_from_chat
     bot_username = (await client.get_me()).username
 
+    # ==========================================================
+    # 🔹 ADMIN CHECK (Improved with Debug)
+    # ==========================================================
     try:
-        member = await client.get_chat_member(chat.id, "me")
+        fetched_chat = await client.get_chat(chat.id)
+        chat_title = fetched_chat.title or chat.title
+
+        me = await client.get_me()
+        member = await client.get_chat_member(chat.id, me.id)
+
+        print(f"DEBUG: Bot @{me.username} status in {chat_title}: {member.status}")
+
         if member.status not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")]]
             return await message.reply_text(
-                f"⚠️ Make @{bot_username} admin in **{chat.title}** first.",
+                f"⚠️ **Bot is not admin**\n\n"
+                f"Channel: {chat_title}\n"
+                f"Bot: @{me.username}\n"
+                f"Status: `{member.status}`\n\n"
+                f"Please add @{me.username} as admin with **Post Messages** permission.",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
     except Exception as e:
+        print(f"DEBUG ERROR: {type(e).__name__}: {e}")
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")]]
         return await message.reply_text(
-            f"⚠️ Error: `{e}`",
+            f"⚠️ **Could not verify admin status**\n\n"
+            f"Channel: {chat.title}\n"
+            f"Error: `{type(e).__name__}: {e}`\n\n"
+            f"Fix: Remove and re-add @{bot_username} as admin in the channel.",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
+    # ==========================================================
+    # 🔹 MODE SELECT
+    # ==========================================================
     fsub_states[user_id] = {
         "state": "waiting_fsub_mode",
         "chat_id": chat.id,
@@ -274,7 +295,7 @@ async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
         "**Format:**\n"
         "`-1001234567890`\n"
         "`-1009876543210`\n\n"
-        "Make sure the bot is admin in each channel first.\n\n"
+        "⚠️ **Note:** This method is unreliable. Use **Add Channel** (forward method) instead.\n\n"
         "/cancel - Cancel this process"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")]]
@@ -309,7 +330,7 @@ async def fsub_receive_auto_channels(client: Client, message: Message):
             await db.add_force_channel(bot_username, chat_id, chat.title, "normal")
             added.append(chat.title)
         except Exception as e:
-            failed.append(f"{line} ({str(e)[:30]})")
+            failed.append(f"{line} ({str(e)[:40]})")
 
     fsub_states.pop(user_id, None)
 
