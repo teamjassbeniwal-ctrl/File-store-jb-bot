@@ -3,7 +3,6 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 
-# Temporary state for users currently editing start text/pic
 edit_states = {}
 
 
@@ -22,9 +21,10 @@ async def start_message_menu(client: Client, callback_query: CallbackQuery):
         "sᴛᴀʀᴛ ᴍᴇssᴀɢᴇ: ᴡʜᴇɴ ᴜsᴇʀ ɢɪᴠᴇ sᴛᴀʀᴛ ᴄᴏᴍᴍᴀɴᴅ ᴏʀ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ᴛʜᴇɴ ʙᴏᴛ ʀᴇᴘʟʏ sᴛᴀʀᴛ ᴍᴇssᴀɢᴇ. ɪɴ sᴛᴀʀᴛ ᴍᴇssᴀɢᴇ ʙᴏᴛ ᴏᴡɴᴇʀ ᴄᴀɴ sᴇᴛ sᴛᴀʀᴛ ᴍᴇssᴀɢᴇ ᴛᴇxᴛ, ᴘɪᴄᴛᴜʀᴇ ᴀɴᴅ ʙᴜᴛᴛᴏɴ."
     )
 
+    # ✅ 2 buttons per row + Back on its own row
     buttons = [
-        [InlineKeyboardButton("Start Text", callback_data="c_start_text")],
-        [InlineKeyboardButton("Start Pic", callback_data="c_start_pic")],
+        [InlineKeyboardButton("Start Text", callback_data="c_start_text"),
+         InlineKeyboardButton("Start Pic", callback_data="c_start_pic")],
         [InlineKeyboardButton("Start Button", callback_data="c_start_button")],
         [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
     ]
@@ -50,9 +50,10 @@ async def start_text_menu(client: Client, callback_query: CallbackQuery):
         f"ᴛᴇxᴛ - {current_text}"
     )
 
+    # ✅ 2 buttons per row + Back on its own row
     buttons = [
-        [InlineKeyboardButton("Set Text", callback_data="c_set_start_text")],
-        [InlineKeyboardButton("Default Text", callback_data="c_default_start_text")],
+        [InlineKeyboardButton("Set Text", callback_data="c_set_start_text"),
+         InlineKeyboardButton("Default Text", callback_data="c_default_start_text")],
         [InlineKeyboardButton("🔙 Back", callback_data="c_start_msg")]
     ]
 
@@ -74,7 +75,8 @@ async def set_start_text(client: Client, callback_query: CallbackQuery):
         "{bot_mention} - ʙᴏᴛ - ɴᴀᴍᴇ ᴍᴇɴᴛɪᴏɴ\n\n"
         "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
     )
-    await callback_query.message.edit_text(text)
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_start_text")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
@@ -94,7 +96,8 @@ async def receive_start_text(client: Client, message: Message):
     if clone_data:
         await db.update_clone_setting(clone_data["user_id"], "start_text", new_text)
 
-    await message.reply_text("✅ Start text updated successfully!")
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_start_text")]]
+    await message.reply_text("✅ Start text updated successfully!", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
@@ -124,7 +127,8 @@ async def start_pic_menu(client: Client, callback_query: CallbackQuery):
     edit_states[user_id] = "waiting_for_start_pic"
 
     text = "🖼️ **Send me a photo** to use as the /start image.\n\n/cancel - Cancel this process."
-    await callback_query.message.edit_text(text)
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_start_msg")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_message(filters.private & filters.photo, group=11)
@@ -141,7 +145,8 @@ async def receive_start_pic(client: Client, message: Message):
     if clone_data:
         await db.update_clone_setting(clone_data["user_id"], "start_pic", file_id)
 
-    await message.reply_text("✅ Start picture updated successfully!")
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_start_msg")]]
+    await message.reply_text("✅ Start picture updated successfully!", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
@@ -170,9 +175,11 @@ async def add_button_prompt(client: Client, callback_query: CallbackQuery):
     edit_states[user_id] = {"state": "btn_row", "row": 1, "col": 1}
 
     text = "📌 **ROW 1**\n\nHow many buttons do you want in this row?\n\nPlease choose an option using the keyboard below."
+    # ✅ Row 1 and 2 buttons side by side, Back on new row
     buttons = [
-        [InlineKeyboardButton("1", callback_data="c_row_1"), InlineKeyboardButton("2", callback_data="c_row_2")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="c_start_button")]
+        [InlineKeyboardButton("1", callback_data="c_row_1"),
+         InlineKeyboardButton("2", callback_data="c_row_2")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_start_button")]
     ]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -189,7 +196,8 @@ async def row_count(client: Client, callback_query: CallbackQuery):
         "Send the button text.\n\n"
         "Maximum length: 64 characters"
     )
-    await callback_query.message.edit_text(text)
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_add_button")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=12)
@@ -201,12 +209,12 @@ async def receive_button_text(client: Client, message: Message):
 
     button_text = message.text[:64]
     state["buttons"].append({"text": button_text})
-
-    # Ask for URL next
     state["state"] = "btn_url"
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_add_button")]]
     await message.reply_text(
-        f"🔗 **Send the URL** for button '{button_text}'.\n\n"
-        "Example: https://t.me/YourChannel"
+        f"🔗 **Send the URL** for button '{button_text}'.\n\nExample: https://t.me/YourChannel",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 
@@ -223,34 +231,28 @@ async def receive_button_url(client: Client, message: Message):
 
     state["buttons"][-1]["url"] = url
 
-    # Check if we need more buttons in this row
     if state["col"] < state["count"]:
         state["col"] += 1
         state["state"] = "btn_text"
-        await message.reply_text(f"🔤 **BUTTON {state['col']}**\n\nSend the button text.")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_add_button")]]
+        await message.reply_text(
+            f"🔤 **BUTTON {state['col']}**\n\nSend the button text.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
     else:
-        # Row complete. Save & ask to add another row or finish.
         bot_username = (await client.get_me()).username
         clone_data = await db.get_clone_by_username(bot_username)
         if clone_data:
             await db.update_clone_setting(clone_data["user_id"], "start_buttons", state["buttons"])
 
         edit_states.pop(user_id, None)
+
+        # ✅ 2 buttons side by side + Back on new row
+        buttons = [
+            [InlineKeyboardButton("➕ Add Another Row", callback_data="c_add_button"),
+             InlineKeyboardButton("✅ Done", callback_data="c_start_msg")]
+        ]
         await message.reply_text(
             "✅ Row 1 saved!\n\nDo you want to add another row?",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Add Another Row", callback_data="c_add_button")],
-                [InlineKeyboardButton("✅ Done", callback_data="c_start_msg")]
-            ])
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
-
-
-# ==========================================================
-# 🔹 CANCEL
-# ==========================================================
-@Client.on_message(filters.command("cancel") & filters.private, group=20)
-async def cancel_start_edit(client: Client, message: Message):
-    user_id = message.from_user.id
-    if user_id in edit_states:
-        edit_states.pop(user_id, None)
-        await message.reply_text("✅ Cancelled.")
