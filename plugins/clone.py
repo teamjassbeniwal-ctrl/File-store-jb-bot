@@ -15,6 +15,11 @@ active_clones = {}
 # ==========================================================
 @Client.on_message(filters.command("clone") & filters.private)
 async def clone_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_id = message.from_user.id
     clone = await db.get_clone(user_id)
 
