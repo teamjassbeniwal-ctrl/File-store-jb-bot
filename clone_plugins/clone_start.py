@@ -699,6 +699,8 @@ async def more_features(client: Client, callback_query: CallbackQuery):
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_back$"))
 async def clone_back_cb(client: Client, callback_query: CallbackQuery):
+    from pyrogram.errors import MessageNotModified
+
     bot_username = (await client.get_me()).username
     bot_mention = f"@{bot_username}"
     user_mention = callback_query.from_user.mention
@@ -714,6 +716,7 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
             "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ.\n\n"
             "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
         )
+
     try:
         formatted = start_text.format(mention=user_mention, bot_mention=bot_mention)
     except Exception:
@@ -725,6 +728,8 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
 
     if not keyboard:
         keyboard = [
+            [InlineKeyboardButton("💎 My Plan", callback_data="c_myplan"),
+             InlineKeyboardButton("📖 Plans", callback_data="c_plan")],
             [InlineKeyboardButton("Help", callback_data="c_help"),
              InlineKeyboardButton("About", callback_data="c_about")],
             [InlineKeyboardButton("Settings", callback_data="c_settings"),
@@ -733,7 +738,10 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
              InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
         ]
 
-    await callback_query.message.edit_text(formatted, reply_markup=InlineKeyboardMarkup(buttons if False else keyboard))
+    try:
+        await callback_query.message.edit_text(formatted, reply_markup=InlineKeyboardMarkup(keyboard))
+    except MessageNotModified:
+        pass
 
 
 # ==========================================================
