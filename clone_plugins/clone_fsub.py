@@ -18,7 +18,7 @@ async def safe_edit(message, text, markup=None):
 
 
 # ==========================================================
-# 🔹 MAIN FORCE SUBSCRIBE MENU
+# 🔹 MAIN FORCE SUBSCRIBE MENU (Clone Bot)
 # ==========================================================
 @Client.on_callback_query(filters.regex("^u_force_sub$"))
 async def fsub_menu(client: Client, callback_query: CallbackQuery):
@@ -87,20 +87,45 @@ async def fsub_receive_channel(client: Client, message: Message):
     chat = message.forward_from_chat
     bot_username = (await client.get_me()).username
 
-    # Verify bot is admin
+    # ==========================================================
+    # 🔹 ADMIN CHECK (Fixed Enum Comparison)
+    # ==========================================================
     try:
-        member = await client.get_chat_member(chat.id, "me")
-        if member.status not in ("administrator", "creator", "owner"):
+        fetched_chat = await client.get_chat(chat.id)
+        chat_title = fetched_chat.title or chat.title
+
+        me = await client.get_me()
+        member = await client.get_chat_member(chat.id, me.id)
+
+        # ✅ Convert enum to string properly
+        status_str = str(member.status).split(".")[-1].lower()
+
+        print(f"DEBUG CLONE: Bot @{me.username} status in {chat_title}: {status_str}")
+
+        if status_str not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
             return await message.reply_text(
-                f"⚠️ Make @{bot_username} admin in **{chat.title}** first.",
+                f"⚠️ **Bot is not admin**\n\n"
+                f"Channel: {chat_title}\n"
+                f"Bot: @{me.username}\n"
+                f"Status: `{status_str}`\n\n"
+                f"Please add @{me.username} as admin with **Post Messages** permission.",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
     except Exception as e:
+        print(f"DEBUG CLONE ERROR: {type(e).__name__}: {e}")
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-        return await message.reply_text(f"⚠️ Error: `{e}`", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            f"⚠️ **Could not verify admin status**\n\n"
+            f"Channel: {chat.title}\n"
+            f"Error: `{type(e).__name__}: {e}`\n\n"
+            f"Fix: Remove and re-add @{bot_username} as admin in the channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
-    # Store temp state
+    # ==========================================================
+    # 🔹 MODE SELECT
+    # ==========================================================
     fsub_states[user_id] = {
         "state": "waiting_fsub_mode",
         "chat_id": chat.id,
@@ -203,9 +228,12 @@ async def fsub_set_buttons(client: Client, callback_query: CallbackQuery):
 
 
 # ==========================================================
-# 🔹 RECEIVE TEXT / IMAGE / BUTTONS
+# 🔹 RECEIVE TEXT / BUTTONS
 # ==========================================================
-@Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=91)
+@Client.on_message(
+    filters.private & filters.text & ~filters.command(["cancel", "start"]),
+    group=91
+)
 async def fsub_receive_text(client: Client, message: Message):
     user_id = message.from_user.id
     state = fsub_states.get(user_id)
@@ -215,7 +243,10 @@ async def fsub_receive_text(client: Client, message: Message):
         await db.set_fsub_text(bot_username, message.text)
         fsub_states.pop(user_id, None)
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-        return await message.reply_text("✅ Force Sub text saved.", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            "✅ Force Sub text saved.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     if state == "waiting_fsub_buttons":
         lines = message.text.strip().split("\n")
@@ -225,13 +256,21 @@ async def fsub_receive_text(client: Client, message: Message):
                 txt, url = line.split(" - ", 1)
                 parsed.append({"text": txt.strip(), "url": url.strip()})
         if not parsed:
-            return await message.reply_text("❌ Invalid format. Use: Button Text - https://link.com")
+            return await message.reply_text(
+                "❌ Invalid format. Use: Button Text - https://link.com"
+            )
         await db.set_fsub_buttons(bot_username, parsed)
         fsub_states.pop(user_id, None)
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-        return await message.reply_text("✅ Buttons saved.", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            "✅ Buttons saved.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
 
+# ==========================================================
+# 🔹 RECEIVE IMAGE
+# ==========================================================
 @Client.on_message(filters.private & filters.photo, group=92)
 async def fsub_receive_image(client: Client, message: Message):
     user_id = message.from_user.id
@@ -241,7 +280,80 @@ async def fsub_receive_image(client: Client, message: Message):
     await db.set_fsub_image(bot_username, message.photo.file_id)
     fsub_states.pop(user_id, None)
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-    await message.reply_text("✅ Force Sub image saved.", reply_markup=InlineKeyboardMarkup(buttons))
+    await message.reply_text(
+        "✅ Force Sub image saved.",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+# ==========================================================
+# 🔹 AUTO ADD CHANNELS (Fixed Enum Comparison)
+# ==========================================================
+@Client.on_callback_query(filters.regex("^fsub_auto_add$"))
+async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
+    fsub_states[callback_query.from_user.id] = "waiting_auto_channels"
+    text = (
+        "🤖 **AUTO ADD CHANNELS**\n\n"
+        "Send me channel IDs (one per line) to add as force-subscribe channels.\n\n"
+        "**Format:**\n"
+        "`-1001234567890`\n"
+        "`-1009876543210`\n\n"
+        "⚠️ **Note:** This method is unreliable. Use **Add Channel** (forward method) instead.\n\n"
+        "/cancel - Cancel this process"
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(
+    filters.private & filters.text & ~filters.command(["cancel", "start"]),
+    group=93
+)
+async def fsub_receive_auto_channels(client: Client, message: Message):
+    user_id = message.from_user.id
+    if fsub_states.get(user_id) != "waiting_auto_channels":
+        return
+
+    bot_username = (await client.get_me()).username
+    lines = message.text.strip().split("\n")
+    added = []
+    failed = []
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            chat_id = int(line)
+            chat = await client.get_chat(chat_id)
+            member = await client.get_chat_member(chat_id, "me")
+
+            # ✅ Enum → string conversion
+            status_str = str(member.status).split(".")[-1].lower()
+
+            if status_str not in ("administrator", "creator", "owner"):
+                failed.append(f"{chat.title} (not admin)")
+                continue
+            await db.add_force_channel(bot_username, chat_id, chat.title, "normal")
+            added.append(chat.title)
+        except Exception as e:
+            failed.append(f"{line} ({str(e)[:40]})")
+
+    fsub_states.pop(user_id, None)
+
+    result = "✅ **Auto Add Result**\n\n"
+    if added:
+        result += f"**Added ({len(added)}):**\n"
+        for ch in added:
+            result += f"• {ch}\n"
+        result += "\n"
+    if failed:
+        result += f"**Failed ({len(failed)}):**\n"
+        for ch in failed:
+            result += f"• {ch}\n"
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
+    await message.reply_text(result, reply_markup=InlineKeyboardMarkup(buttons))
 
 
 # ==========================================================
@@ -262,4 +374,7 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
             "✅ **Verification Complete!**\n\nYou can now send files again."
         )
     else:
-        await callback_query.answer("⚠️ You haven't joined all channels yet.", show_alert=True)
+        await callback_query.answer(
+            "⚠️ You haven't joined all channels yet.",
+            show_alert=True
+        )
