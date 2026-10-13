@@ -100,8 +100,9 @@ async def clone_special_link(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
+
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE FOR /link
+# 🔹 HANDLE SINGLE FILE FOR /link (WITH LOG)
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -127,14 +128,7 @@ async def handle_clone_link(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-
-            default_text = (
-                "📢 **Please Join Our Channels**\n\n"
-                "To use this bot, you must join the channels below.\n"
-                "After joining, click **✅ I Joined**."
-            )
-            msg_text = fsub_text or default_text
-
+            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -146,23 +140,16 @@ async def handle_clone_link(client: Client, message: Message):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
         tutorial = await db.get_verify_tutorial(bot_username)
-
         direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
         short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
-
         buttons = []
         if short:
             buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
         if tutorial:
             buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
         buttons.append([InlineKeyboardButton("💎 Get Premium", callback_data="premium")])
-
         return await message.reply_text(
-            f"ʜᴇʏ {message.from_user.first_name}\n\n"
-            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
-            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
-            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ 😊.\n\n"
-            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
@@ -216,6 +203,49 @@ async def handle_clone_link(client: Client, message: Message):
         disable_web_page_preview=True
     )
 
+    # ==========================================================
+    # 🔹 LOG CHANNEL — media auto forward
+    # ==========================================================
+    clone_data = await db.get_clone_by_username(bot_username)
+    log_channel = clone_data.get("log_channel") if clone_data else None
+
+    if log_channel:
+        try:
+            user = message.from_user
+            file_name = "Unknown"
+            file_size = "Unknown"
+
+            if message.document:
+                file_name = message.document.file_name or "Document"
+                file_size = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
+            elif message.video:
+                file_name = message.video.file_name or "Video"
+                file_size = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
+            elif message.audio:
+                file_name = message.audio.file_name or "Audio"
+                file_size = f"{round(message.audio.file_size / 1024 / 1024, 2)} MB"
+            elif message.photo:
+                file_name = "Photo"
+            elif message.text:
+                file_name = "Text Message"
+
+            log_text = (
+                f"📥 **New File Stored**\n\n"
+                f"👤 **User:** {user.mention}\n"
+                f"🆔 **ID:** `{user.id}`\n"
+                f"📛 **Username:** @{user.username or 'None'}\n\n"
+                f"📁 **File:** `{file_name}`\n"
+                f"📦 **Size:** {file_size}\n\n"
+                f"🔗 **Link:** {final_link}"
+            )
+
+            # Try copy media with caption
+            try:
+                await message.copy(log_channel, caption=log_text)
+            except Exception:
+                await client.send_message(log_channel, log_text, disable_web_page_preview=True)
+        except Exception as e:
+            print(f"Log channel error: {e}")
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
@@ -257,7 +287,7 @@ async def handle_clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE BATCH COUNT
+# 🔹 HANDLE BATCH COUNT (WITH LOG)
 # ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=3)
 async def handle_clone_batch_count(client: Client, message: Message):
@@ -284,14 +314,7 @@ async def handle_clone_batch_count(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-
-            default_text = (
-                "📢 **Please Join Our Channels**\n\n"
-                "To use this bot, you must join the channels below.\n"
-                "After joining, click **✅ I Joined**."
-            )
-            msg_text = fsub_text or default_text
-
+            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -303,20 +326,15 @@ async def handle_clone_batch_count(client: Client, message: Message):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
         tutorial = await db.get_verify_tutorial(bot_username)
-
         direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
         short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
-
         buttons = []
         if short:
             buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
         if tutorial:
             buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
-
         return await message.reply_text(
-            f"ʜᴇʏ {message.from_user.first_name}\n\n"
-            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
-            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
@@ -351,6 +369,27 @@ async def handle_clone_batch_count(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup(buttons),
         disable_web_page_preview=True
     )
+
+    # ==========================================================
+    # 🔹 LOG CHANNEL — batch log
+    # ==========================================================
+    clone_data = await db.get_clone_by_username(bot_username)
+    log_channel = clone_data.get("log_channel") if clone_data else None
+
+    if log_channel:
+        try:
+            user = message.from_user
+            log_text = (
+                f"📦 **New Batch Stored**\n\n"
+                f"👤 **User:** {user.mention}\n"
+                f"🆔 **ID:** `{user.id}`\n"
+                f"📛 **Username:** @{user.username or 'None'}\n\n"
+                f"📁 **Files Count:** `{count}`\n\n"
+                f"🔗 **Link:** {final_link}"
+            )
+            await client.send_message(log_channel, log_text, disable_web_page_preview=True)
+        except Exception as e:
+            print(f"Log channel error: {e}")
 
 
 # ==========================================================
