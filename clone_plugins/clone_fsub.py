@@ -97,7 +97,7 @@ async def fsub_receive_channel(client: Client, message: Message):
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
 
-        # ✅ Convert enum to string properly
+        # ✅ Convert enum to string
         status_str = str(member.status).split(".")[-1].lower()
 
         print(f"DEBUG CLONE: Bot @{me.username} status in {chat_title}: {status_str}")
