@@ -315,8 +315,6 @@ async def user_setting_handler(client: Client, callback_query: CallbackQuery):
     messages = {
         "free_limit": "🆓 Free usage: 5 files per day.",
         "refer": "🌍 Refer & Earn: Coming soon!",
-        "shortner": "🔗 Shortlink: Configure shortlink API.",
-        "token_verify": "⏰ Token Verification: Toggle on/off.",
         "force_sub": "📢 Force Subscribe: Require channel join.",
         "caption": "🍿 Caption: Send caption text.",
         "thumbnail": "🖼️ Thumbnail: Send a photo.",
@@ -744,8 +742,6 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
 
     if not keyboard:
         keyboard = [
-            [InlineKeyboardButton("💎 My Plan", callback_data="c_myplan"),
-             InlineKeyboardButton("📖 Plans", callback_data="c_plan")],
             [InlineKeyboardButton("Help", callback_data="c_help"),
              InlineKeyboardButton("About", callback_data="c_about")],
             [InlineKeyboardButton("Settings", callback_data="c_settings"),
