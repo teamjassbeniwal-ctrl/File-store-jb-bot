@@ -516,7 +516,152 @@ class Database:
             }
         )
 
+    # ==========================================================
+    # TOKEN VERIFICATION (PER BOT)
+    # ==========================================================
+
+    async def set_verify_shortlink_url(self, bot_key, url):
+        await self.settings.update_one(
+            {"key": f"verify_sl_url_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"verify_sl_url_{bot_key}",
+                    "value": url
+                }
+            },
+            upsert=True
+        )
+
+    async def get_verify_shortlink_url(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"verify_sl_url_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    async def set_verify_shortlink_api(self, bot_key, api):
+        await self.settings.update_one(
+            {"key": f"verify_sl_api_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"verify_sl_api_{bot_key}",
+                    "value": api
+                }
+            },
+            upsert=True
+        )
+
+    async def get_verify_shortlink_api(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"verify_sl_api_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    async def delete_verify_shortlink(self, bot_key):
+        await self.settings.delete_many(
+            {
+                "key": {
+                    "$in": [
+                        f"verify_sl_url_{bot_key}",
+                        f"verify_sl_api_{bot_key}"
+                    ]
+                }
+            }
+        )
+
+    # ==========================================================
+    # VERIFICATION TUTORIAL
+    # ==========================================================
+
+    async def set_verify_tutorial(self, bot_key, link):
+        await self.settings.update_one(
+            {"key": f"verify_tutorial_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"verify_tutorial_{bot_key}",
+                    "value": link
+                }
+            },
+            upsert=True
+        )
+
+    async def get_verify_tutorial(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"verify_tutorial_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    async def delete_verify_tutorial(self, bot_key):
+        await self.settings.delete_one(
+            {"key": f"verify_tutorial_{bot_key}"}
+        )
+
+    # ==========================================================
+    # VERIFICATION TIME
+    # ==========================================================
+
+    async def set_verify_time(self, bot_key, time_str):
+        await self.settings.update_one(
+            {"key": f"verify_time_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"verify_time_{bot_key}",
+                    "value": time_str
+                }
+            },
+            upsert=True
+        )
+
+    async def get_verify_time(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"verify_time_{bot_key}"}
+        )
+        return r["value"] if r else "2m"
+
+    # ==========================================================
+    # VERIFICATION STATUS
+    # ==========================================================
+
+    async def set_verify_status(self, bot_key, status: bool):
+        await self.settings.update_one(
+            {"key": f"verify_status_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"verify_status_{bot_key}",
+                    "value": status
+                }
+            },
+            upsert=True
+        )
+
+    async def get_verify_status(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"verify_status_{bot_key}"}
+        )
+        return r["value"] if r else False
+
+    # ==========================================================
+    # USER VERIFICATION TIMESTAMP
+    # ==========================================================
+
+    async def set_user_verify_time(self, user_id, bot_key, timestamp):
+        await self.users.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    f"verify_ts_{bot_key}": timestamp
+                }
+            },
+            upsert=True
+        )
+
+    async def get_user_verify_time(self, user_id, bot_key):
+        u = await self.users.find_one(
+            {"user_id": user_id}
+        )
+        return u.get(f"verify_ts_{bot_key}") if u else None
+
 
 # Global database instance
 db = Database()
+                    
 
