@@ -37,6 +37,38 @@ async def clone_start(client: Client, message: Message):
             print(f"Log channel error: {e}")
 
     # ==========================================================
+    # 🔹 FORCE SUBSCRIBE GATE — sirf normal /start pe
+    # ==========================================================
+    is_deep_link = message.text and " " in message.text
+    if not is_deep_link:
+        fsub_status = await db.get_fsub_status(bot_username)
+        if fsub_status:
+            from utils.fsub_helper import check_subscription, build_fsub_keyboard
+            not_joined = await check_subscription(client, user_id, bot_username)
+            if not_joined:
+                fsub_text = await db.get_fsub_text(bot_username)
+                fsub_img = await db.get_fsub_image(bot_username)
+                keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
+                msg_text = fsub_text or (
+                    "📢 **Please Join Our Channels**\n\n"
+                    "To use this bot, you must join the channels below.\n"
+                    "After joining, click **✅ I Joined**."
+                )
+                if fsub_img:
+                    await message.reply_photo(
+                        photo=fsub_img,
+                        caption=msg_text,
+                        reply_markup=keyboard
+                    )
+                else:
+                    await message.reply_text(
+                        msg_text,
+                        reply_markup=keyboard,
+                        disable_web_page_preview=True
+                    )
+                return
+
+    # ==========================================================
     # 🔹 DEEP LINK HANDLER
     # ==========================================================
     if message.text and " " in message.text:
@@ -131,12 +163,17 @@ async def clone_start(client: Client, message: Message):
 @Client.on_message(filters.command("help") & filters.private)
 async def clone_help_cmd(client: Client, message: Message):
     await send_clone_help(message)
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
 
 
 @Client.on_callback_query(filters.regex("^c_help$"))
 async def clone_help_cb(client: Client, callback_query: CallbackQuery):
     await send_clone_help(callback_query.message, edit=True)
-
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
 
 async def send_clone_help(message, edit=False):
     text = (
@@ -187,6 +224,9 @@ async def send_clone_help(message, edit=False):
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_about$"))
 async def clone_about_cb(client: Client, callback_query: CallbackQuery):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     text = (
         "○ **Creator** : King VJ\n"
         "○ **Language** : Python3\n"
@@ -207,6 +247,9 @@ async def clone_about_cb(client: Client, callback_query: CallbackQuery):
 # ==========================================================
 @Client.on_message(filters.command("id") & filters.private)
 async def clone_id_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user = message.from_user
     text = (
         "User Details :\n\n\n"
@@ -228,6 +271,9 @@ async def clone_id_cmd(client: Client, message: Message):
 @Client.on_message(filters.command("settings") & filters.private)
 async def user_settings_cmd(client: Client, message: Message):
     await send_user_settings(message)
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
 
 
 @Client.on_callback_query(filters.regex("^c_settings$"))
@@ -267,6 +313,9 @@ async def send_user_settings(message, edit=False):
 # ==========================================================
 @Client.on_message(filters.command("customize") & filters.private)
 async def customize_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
 
@@ -331,6 +380,9 @@ async def user_setting_handler(client: Client, callback_query: CallbackQuery):
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     log_channel = clone_data.get("log_channel") if clone_data else None
