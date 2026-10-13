@@ -174,8 +174,8 @@ async def send_main_settings(message, edit=False):
         "CUSTOMIZE YOUR SETTINGS AS PER YOUR NEED"
     )
     buttons = [
-        [InlineKeyboardButton("🤖 MY CLONE BOT", callback_data="my_clone")],
-        [InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")],
+        [InlineKeyboardButton("🤖 MY CLONE BOT", callback_data="create_clone")],
+        [InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")]
         [InlineKeyboardButton("🔗 LINK SHORTNER", callback_data="shortner")],
         [InlineKeyboardButton("⏰ TOKEN VERIFICATION", callback_data="token_verify")],
         [InlineKeyboardButton("🍿 CUSTOM CAPTION", callback_data="custom_caption")],
