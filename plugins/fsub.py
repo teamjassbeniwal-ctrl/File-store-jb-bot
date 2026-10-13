@@ -26,7 +26,6 @@ async def fsub_menu(client: Client, callback_query: CallbackQuery):
     status = await db.get_fsub_status(bot_username)
     status_text = "ᴏɴ ✅" if status else "ᴏꜰꜰ ❌"
 
-    # Get channel list
     channels = await db.get_force_channels(bot_username)
     ch_list = ""
     if channels:
@@ -91,9 +90,15 @@ async def fsub_delete_menu(client: Client, callback_query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex(r"^mfsub_del_-?\d+$"))
 async def fsub_delete_channel(client: Client, callback_query: CallbackQuery):
-    # Extract channel id from callback data
     channel_id = int(callback_query.data.replace("mfsub_del_", ""))
     bot_username = (await client.get_me()).username
+
+    # Check existence
+    channels = await db.get_force_channels(bot_username)
+    exists = any(ch["id"] == channel_id for ch in channels)
+
+    if not exists:
+        return await callback_query.answer("⚠️ Channel not found.", show_alert=True)
 
     await db.remove_force_channel(bot_username, channel_id)
     await callback_query.answer("✅ Channel deleted.", show_alert=True)
@@ -141,7 +146,6 @@ async def fsub_receive_channel(client: Client, message: Message):
 
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
-
         status_str = str(member.status).split(".")[-1].lower()
         print(f"DEBUG: Bot @{me.username} status in {chat_title}: {status_str}")
 
@@ -399,7 +403,9 @@ async def fsub_receive_auto_channels(client: Client, message: Message):
 @Client.on_callback_query(filters.regex("^fsub_check$"))
 async def fsub_check(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
-    not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
+    user_id = callback_query.from_user.id
+
+    not_joined = await check_subscription(client, user_id, bot_username)
 
     if not not_joined:
         await callback_query.answer("✅ Verified!", show_alert=True)
@@ -408,10 +414,13 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
         except Exception:
             pass
         await callback_query.message.reply_text(
-            "✅ **Verification Complete!**\n\nYou can now send files again."
+            "✅ **Verification Complete!**\n\n"
+            "Ab aap bot ka istemal kar sakte hain.\n\n"
+            "Send `/start` to continue."
         )
     else:
+        missing = ", ".join([ch["name"] for ch in not_joined])
         await callback_query.answer(
-            "⚠️ You haven't joined all channels yet.",
+            f"⚠️ Aapne abhi tak nahi join kiya:\n{missing}",
             show_alert=True
         )
