@@ -92,6 +92,8 @@ async def clone_start(client: Client, message: Message):
 
     if not keyboard:
         keyboard = [
+            [InlineKeyboardButton("💎 My Plan", callback_data="c_myplan"),
+             InlineKeyboardButton("📖 Plans", callback_data="c_plan")],
             [InlineKeyboardButton("Help", callback_data="c_help"),
              InlineKeyboardButton("About", callback_data="c_about")],
             [InlineKeyboardButton("Settings", callback_data="c_settings"),
