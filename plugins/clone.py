@@ -2,6 +2,8 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 import asyncio
+# plugins/clone.py (add at the top)
+from config import API_ID, API_HASH
 
 # Dictionary to hold running clone clients
 active_clones = {}
