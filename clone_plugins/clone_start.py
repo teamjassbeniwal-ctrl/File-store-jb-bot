@@ -376,13 +376,10 @@ async def user_setting_handler(client: Client, callback_query: CallbackQuery):
 
 
 # ==========================================================
-# 🔹 LOG CHANNEL
+# 🔹 LOG CHANNEL MENU (Clone Bot)
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
-    from utils.fsub_middleware import check_force_sub
-    if not await check_force_sub(client, message, bot_username):
-        return
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     log_channel = clone_data.get("log_channel") if clone_data else None
@@ -433,26 +430,50 @@ async def receive_log_channel(client: Client, message: Message):
         return
     if not message.forward_from_chat:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-        return await message.reply_text("⚠️ Please forward a message from the channel.", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            "⚠️ Please forward a message from the channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     chat = message.forward_from_chat
     chat_type = str(chat.type).lower().replace("chattype.", "")
     if chat_type not in ("channel", "supergroup"):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-        return await message.reply_text("⚠️ Only channels/supergroups allowed.", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            "⚠️ Only channels/supergroups allowed.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     bot_username = (await client.get_me()).username
+
+    # ==========================================================
+    # 🔹 ADMIN CHECK (Fixed Enum Comparison)
+    # ==========================================================
     try:
-        member = await client.get_chat_member(chat.id, "me")
-        if member.status not in ("administrator", "creator", "owner"):
+        me = await client.get_me()
+        member = await client.get_chat_member(chat.id, me.id)
+
+        # ✅ Convert enum to string
+        status_str = str(member.status).split(".")[-1].lower()
+
+        print(f"DEBUG LOG: Bot @{me.username} status in {chat.title}: {status_str}")
+
+        if status_str not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
             return await message.reply_text(
-                f"⚠️ @{bot_username} is not admin in **{chat.title}**.",
+                f"⚠️ **Bot is not admin**\n\n"
+                f"Channel: {chat.title}\n"
+                f"Bot: @{me.username}\n"
+                f"Status: `{status_str}`",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
     except Exception as e:
+        print(f"DEBUG LOG ERROR: {type(e).__name__}: {e}")
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-        return await message.reply_text(f"⚠️ Error: `{e}`", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            f"⚠️ Error: `{type(e).__name__}: {e}`",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     edit_states.pop(user_id, None)
     clone_data = await db.get_clone_by_username(bot_username)
@@ -460,7 +481,10 @@ async def receive_log_channel(client: Client, message: Message):
         await db.update_clone_setting(clone_data["user_id"], "log_channel", chat.id)
 
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-    await message.reply_text(f"✅ **Log Channel Set:** {chat.title}", reply_markup=InlineKeyboardMarkup(buttons))
+    await message.reply_text(
+        f"✅ **Log Channel Set:** {chat.title}",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
 
 
 @Client.on_callback_query(filters.regex("^c_delete_log$"))
@@ -472,6 +496,117 @@ async def delete_log_channel(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("✅ Deleted.", show_alert=True)
     await log_channel_menu(client, callback_query)
 
+
+# ==========================================================
+# 🔹 DATABASE CHANNEL MENU
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_db_channel$"))
+async def db_channel_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    db_channel = clone_data.get("db_channel") if clone_data else None
+
+    text = "☁️ **DATABASE CHANNEL:**\n\n"
+    if db_channel:
+        text += f"✅ **Current:** `{db_channel}`"
+    else:
+        text += "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ❗️"
+
+    buttons = [
+        [InlineKeyboardButton("Set Database Channel", callback_data="c_set_db")],
+        [InlineKeyboardButton("Delete Channel", callback_data="c_delete_db")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^c_set_db$"))
+async def set_db_channel(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    edit_states[user_id] = "waiting_for_db_channel"
+    bot_username = (await client.get_me()).username
+
+    text = (
+        f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ,\n"
+        f"ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ ɪɴ ɪᴛ.\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private, group=22)
+async def receive_db_channel(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_db_channel":
+        return
+    if message.text and message.text.startswith("/"):
+        edit_states.pop(user_id, None)
+        return
+    if not message.forward_from_chat:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            "⚠️ Please forward a message from the channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    chat = message.forward_from_chat
+    chat_type = str(chat.type).lower().replace("chattype.", "")
+    if chat_type not in ("channel", "supergroup"):
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            "⚠️ Only channels/supergroups allowed.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    bot_username = (await client.get_me()).username
+
+    try:
+        me = await client.get_me()
+        member = await client.get_chat_member(chat.id, me.id)
+
+        # ✅ Convert enum to string
+        status_str = str(member.status).split(".")[-1].lower()
+
+        print(f"DEBUG DB: Bot @{me.username} status in {chat.title}: {status_str}")
+
+        if status_str not in ("administrator", "creator", "owner"):
+            buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+            return await message.reply_text(
+                f"⚠️ **Bot is not admin**\n\n"
+                f"Channel: {chat.title}\n"
+                f"Bot: @{me.username}\n"
+                f"Status: `{status_str}`",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    except Exception as e:
+        print(f"DEBUG DB ERROR: {type(e).__name__}: {e}")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            f"⚠️ Error: `{type(e).__name__}: {e}`",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    edit_states.pop(user_id, None)
+    clone_data = await db.get_clone_by_username(bot_username)
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "db_channel", chat.id)
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+    await message.reply_text(
+        f"✅ **DB Channel Set:** {chat.title}",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+@Client.on_callback_query(filters.regex("^c_delete_db$"))
+async def delete_db_channel(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if clone_data:
+        await db.update_clone_setting(clone_data["user_id"], "db_channel", None)
+    await callback_query.answer("✅ Deleted.", show_alert=True)
+    await db_channel_menu(client, callback_query)
 
 # ==========================================================
 # 🔹 DATABASE CHANNEL
