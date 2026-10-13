@@ -88,7 +88,7 @@ async def fsub_receive_channel(client: Client, message: Message):
     bot_username = (await client.get_me()).username
 
     # ==========================================================
-    # 🔹 ADMIN CHECK (Improved with Debug)
+    # 🔹 ADMIN CHECK (Fixed Enum Comparison)
     # ==========================================================
     try:
         fetched_chat = await client.get_chat(chat.id)
@@ -97,15 +97,18 @@ async def fsub_receive_channel(client: Client, message: Message):
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
 
-        print(f"DEBUG: Bot @{me.username} status in {chat_title}: {member.status}")
+        # ✅ Convert enum to string properly
+        status_str = str(member.status).split(".")[-1].lower()
 
-        if member.status not in ("administrator", "creator", "owner"):
+        print(f"DEBUG: Bot @{me.username} status in {chat_title}: {status_str}")
+
+        if status_str not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")]]
             return await message.reply_text(
                 f"⚠️ **Bot is not admin**\n\n"
                 f"Channel: {chat_title}\n"
                 f"Bot: @{me.username}\n"
-                f"Status: `{member.status}`\n\n"
+                f"Status: `{status_str}`\n\n"
                 f"Please add @{me.username} as admin with **Post Messages** permission.",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
@@ -284,7 +287,7 @@ async def fsub_receive_image(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 AUTO ADD CHANNELS
+# 🔹 AUTO ADD CHANNELS (Fixed Enum Comparison)
 # ==========================================================
 @Client.on_callback_query(filters.regex("^mfsub_auto_add$"))
 async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
@@ -324,7 +327,11 @@ async def fsub_receive_auto_channels(client: Client, message: Message):
             chat_id = int(line)
             chat = await client.get_chat(chat_id)
             member = await client.get_chat_member(chat_id, "me")
-            if member.status not in ("administrator", "creator", "owner"):
+
+            # ✅ Enum → string conversion
+            status_str = str(member.status).split(".")[-1].lower()
+
+            if status_str not in ("administrator", "creator", "owner"):
                 failed.append(f"{chat.title} (not admin)")
                 continue
             await db.add_force_channel(bot_username, chat_id, chat.title, "normal")
