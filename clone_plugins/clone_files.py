@@ -1,416 +1,378 @@
-# clone_plugins/clone_fsub.py
+# clone_plugins/clone_files.py
 from pyrogram import Client, filters
-from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import MessageNotModified
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
+from utils.shortener import shorten_url
+from utils.verify_helper import needs_verification, mark_verified
 from utils.fsub_helper import check_subscription, build_fsub_keyboard
+from utils.fsub_middleware import check_force_sub
+import base64
+import time
 
-fsub_states = {}
-
-
-async def safe_edit(message, text, markup=None):
-    try:
-        await message.edit_text(text, reply_markup=markup, disable_web_page_preview=True)
-    except MessageNotModified:
-        pass
-    except Exception as e:
-        print(f"Edit error: {e}")
+user_states = {}
 
 
 # ==========================================================
-# 🔹 CLONE FORCE SUBSCRIBE MENU
+# 🔹 /link
 # ==========================================================
-@Client.on_callback_query(filters.regex("^u_force_sub$"))
-async def fsub_menu(client: Client, callback_query: CallbackQuery):
+@Client.on_message(filters.command("link") & filters.private)
+async def clone_link(client: Client, message: Message):
     bot_username = (await client.get_me()).username
-    status = await db.get_fsub_status(bot_username)
-    status_text = "ᴏɴ ✅" if status else "ᴏꜰꜰ ❌"
+    if not await check_force_sub(client, message, bot_username):
+        return
 
-    # Get channel list
-    channels = await db.get_force_channels(bot_username)
-    ch_list = ""
-    if channels:
-        for i, ch in enumerate(channels, 1):
-            mode_icon = "📩" if ch.get("mode") == "request" else "🔔"
-            ch_list += f"\n{mode_icon} {i}. {ch['name']}"
-    else:
-        ch_list = "\n\nʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴄʜᴀɴɴᴇʟs."
-
-    text = (
-        "📢 **FORCE SUBSCRIBE:**\n\n"
-        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ:\n"
-        "ᴀ ᴛᴇʟᴇɢʀᴀᴍ ʙᴏᴛ ғᴇᴀᴛᴜʀᴇ ғᴏʀᴄɪɴɢ ᴜsᴇʀs ᴛᴏ sᴜʙsᴄʀɪʙᴇ ᴛᴏ "
-        "sᴘᴇᴄɪғɪᴄ ᴄʜᴀɴɴᴇʟs ʙᴇғᴏʀᴇ ᴀᴄᴄᴇssɪɴɢ ᴄᴏɴᴛᴇɴᴛ.\n\n"
-        "ɴᴏʀᴍᴀʟ ғsᴜʙ:\n"
-        "ʀᴇǫᴜɪʀᴇs ᴛʜᴇ ᴜsᴇʀ ᴛᴏ ᴄʟɪᴄᴋ ᴀ ᴊᴏɪɴ ʙᴜᴛᴛᴏɴ ᴏɴ ᴀ ᴄʜᴀɴɴᴇʟ ᴏʀ "
-        "ɢʀᴏᴜᴘ, ᴛʜᴇɴ ʙᴏᴛ ᴄʜᴇᴄᴋs ᴍᴇᴍʙᴇʀsʜɪᴘ ɪɴsᴛᴀɴᴛʟʏ ᴛᴏ ᴜɴʟᴏᴄᴋ "
-        "ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴄᴏɴᴛᴇɴᴛ ᴏʀ ᴄʜᴀᴛ ᴀᴄᴄᴇss.\n\n"
-        "ᴊᴏɪɴ ʀᴇǫᴜᴇsᴛ ғsᴜʙ:\n"
-        "ʀᴇǫᴜɪʀᴇs ᴛʜᴇ ᴜsᴇʀ ᴛᴏ sᴇɴᴅ ᴀ ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴀ ᴘʀɪᴠᴀᴛᴇ "
-        "ᴄʜᴀɴɴᴇʟ ᴏʀ ɢʀᴏᴜᴘ ᴛʜᴇɴ ᴜsᴇʀ ᴄᴀɴ ᴀᴄᴄᴇss ᴄᴏɴᴛᴇɴᴛ.\n\n"
-        f"📋 **CHANNELS:**{ch_list}\n\n"
-        f"ꜰᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ - {status_text}"
+    user_states[message.from_user.id] = "waiting_for_link_file"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await message.reply_text(
+        "sᴇɴᴅ ᴍᴇ ʏᴏᴜʀ ᴍᴇssᴀɢᴇ ᴡʜɪᴄʜ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴛᴏʀᴇ",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-    buttons = [
-        [InlineKeyboardButton("Add Channel", callback_data="fsub_add"),
-         InlineKeyboardButton("Delete Channel", callback_data="fsub_del")],
-        [InlineKeyboardButton("Auto Add Channels", callback_data="fsub_auto_add")],
-        [InlineKeyboardButton("Force Subscribe On/Off", callback_data="fsub_toggle")],
-        [InlineKeyboardButton("Force Subscribe Message", callback_data="fsub_msg")],
-        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
-    ]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
 
 # ==========================================================
-# 🔹 DELETE CHANNEL
+# 🔹 /batch
 # ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_del$"))
-async def fsub_delete_menu(client: Client, callback_query: CallbackQuery):
+@Client.on_message(filters.command("batch") & filters.private)
+async def clone_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
-    channels = await db.get_force_channels(bot_username)
+    if not await check_force_sub(client, message, bot_username):
+        return
 
-    if not channels:
-        return await callback_query.answer("⚠️ No channels to delete.", show_alert=True)
-
-    buttons = []
-    for i, ch in enumerate(channels, 1):
-        mode_icon = "📩" if ch.get("mode") == "request" else "🔔"
-        buttons.append([
-            InlineKeyboardButton(
-                f"❌ {mode_icon} {ch['name']}",
-                callback_data=f"fsub_del_{ch['id']}"
-            )
-        ])
-    buttons.append([InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")])
-
-    text = "🗑️ **Select a channel to delete:**"
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex(r"^fsub_del_-?\d+$"))
-async def fsub_delete_channel(client: Client, callback_query: CallbackQuery):
-    channel_id = int(callback_query.data.replace("fsub_del_", ""))
-    bot_username = (await client.get_me()).username
-
-    await db.remove_force_channel(bot_username, channel_id)
-    await callback_query.answer("✅ Channel deleted.", show_alert=True)
-    await fsub_menu(client, callback_query)
-
-
-# ==========================================================
-# 🔹 ADD CHANNEL
-# ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_add$"))
-async def fsub_add(client: Client, callback_query: CallbackQuery):
-    fsub_states[callback_query.from_user.id] = "waiting_fsub_channel"
-    text = (
-        "❪ **SET CHANNEL** ❫\n\n"
-        "ғᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ғʀᴏᴍ ʏᴏᴜʀ ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴄʜᴀɴɴᴇʟ "
-        "ᴡɪᴛʜ ғᴏʀᴡᴀʀᴅ ᴛᴀɢ ᴀɴᴅ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴀᴛ ᴄʜᴀɴɴᴇʟ "
-        "ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛs\n\n"
-        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss"
+    user_states[message.from_user.id] = "waiting_for_batch_file"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await message.reply_text(
+        "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 "
+        "(𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 "
+        "𝗟𝗶𝗻𝗸 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
+        f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username}  ʙᴏᴛ ɪs ᴀᴅᴍɪɴ "
+        "ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛ",
+        reply_markup=InlineKeyboardMarkup(buttons)
     )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
 
 
-@Client.on_message(filters.private, group=90)
-async def fsub_receive_channel(client: Client, message: Message):
+# ==========================================================
+# 🔹 /custom_batch
+# ==========================================================
+@Client.on_message(filters.command("custom_batch") & filters.private)
+async def clone_custom_batch(client: Client, message: Message):
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+
+    user_states[message.from_user.id] = "waiting_for_custom_batch"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await message.reply_text(
+        "📝 **CUSTOM BATCH**\n\nSend message links (one per line).",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+# ==========================================================
+# 🔹 /multiple_batch
+# ==========================================================
+@Client.on_message(filters.command("multiple_batch") & filters.private)
+async def clone_multiple_batch(client: Client, message: Message):
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+
+    user_states[message.from_user.id] = "waiting_for_multiple_batch"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await message.reply_text(
+        "📦 **MULTIPLE BATCH**\n\nSend multiple channel messages (one per line).",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+# ==========================================================
+# 🔹 /special_link
+# ==========================================================
+@Client.on_message(filters.command("special_link") & filters.private)
+async def clone_special_link(client: Client, message: Message):
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+
+    user_states[message.from_user.id] = "waiting_for_special_link"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await message.reply_text(
+        "✨ **SPECIAL LINK**\n\nSend me the file to store with custom settings.",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+# ==========================================================
+# 🔹 HANDLE SINGLE FILE FOR /link
+# ==========================================================
+@Client.on_message(
+    filters.private &
+    (filters.document | filters.video | filters.photo | filters.audio |
+     filters.voice | filters.video_note | filters.animation | filters.text),
+    group=1
+)
+async def handle_clone_link(client: Client, message: Message):
     user_id = message.from_user.id
-    if fsub_states.get(user_id) != "waiting_fsub_channel":
+    if user_states.get(user_id) != "waiting_for_link_file":
         return
     if message.text and message.text.startswith("/"):
-        fsub_states.pop(user_id, None)
         return
-    if not message.forward_from_chat:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-        return await message.reply_text(
-            "⚠️ Forward a message from a channel.",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+    user_states.pop(user_id, None)
 
-    chat = message.forward_from_chat
     bot_username = (await client.get_me()).username
 
-    try:
-        fetched_chat = await client.get_chat(chat.id)
-        chat_title = fetched_chat.title or chat.title
+    # Force Sub gate
+    fsub_status = await db.get_fsub_status(bot_username)
+    if fsub_status:
+        not_joined = await check_subscription(client, user_id, bot_username)
+        if not_joined:
+            fsub_text = await db.get_fsub_text(bot_username)
+            fsub_img = await db.get_fsub_image(bot_username)
+            keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
 
-        me = await client.get_me()
-        member = await client.get_chat_member(chat.id, me.id)
-
-        status_str = str(member.status).split(".")[-1].lower()
-        print(f"DEBUG CLONE: Bot @{me.username} status in {chat_title}: {status_str}")
-
-        if status_str not in ("administrator", "creator", "owner"):
-            buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-            return await message.reply_text(
-                f"⚠️ **Bot is not admin**\n\n"
-                f"Channel: {chat_title}\n"
-                f"Bot: @{me.username}\n"
-                f"Status: `{status_str}`\n\n"
-                f"Please add @{me.username} as admin with **Post Messages** permission.",
-                reply_markup=InlineKeyboardMarkup(buttons)
+            default_text = (
+                "📢 **Please Join Our Channels**\n\n"
+                "To use this bot, you must join the channels below.\n"
+                "After joining, click **✅ I Joined**."
             )
-    except Exception as e:
-        print(f"DEBUG CLONE ERROR: {type(e).__name__}: {e}")
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
+            msg_text = fsub_text or default_text
+
+            if fsub_img:
+                await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
+            else:
+                await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
+            return
+
+    # Verification gate
+    if await needs_verification(user_id, bot_username):
+        v_url = await db.get_verify_shortlink_url(bot_username)
+        v_api = await db.get_verify_shortlink_api(bot_username)
+        tutorial = await db.get_verify_tutorial(bot_username)
+
+        direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
+        short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
+
+        buttons = []
+        if short:
+            buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
+        if tutorial:
+            buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
+        buttons.append([InlineKeyboardButton("💎 Get Premium", callback_data="premium")])
+
         return await message.reply_text(
-            f"⚠️ **Could not verify admin status**\n\n"
-            f"Channel: {chat.title}\n"
-            f"Error: `{type(e).__name__}: {e}`\n\n"
-            f"Fix: Remove and re-add @{bot_username} as admin in the channel.",
+            f"ʜᴇʏ {message.from_user.first_name}\n\n"
+            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
+            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
+            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ 😊.\n\n"
+            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
+        )
+
+    # File processing
+    file_id = None
+    if message.document:
+        file_id = message.document.file_id
+    elif message.video:
+        file_id = message.video.file_id
+    elif message.photo:
+        file_id = message.photo.file_id
+    elif message.audio:
+        file_id = message.audio.file_id
+    elif message.voice:
+        file_id = message.voice.file_id
+    elif message.video_note:
+        file_id = message.video_note.file_id
+    elif message.animation:
+        file_id = message.animation.file_id
+    elif message.text:
+        file_id = f"text:{message.text}"
+
+    if not file_id:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+        return await message.reply_text("❌ Unsupported file type.", reply_markup=InlineKeyboardMarkup(buttons))
+
+    raw_id = f"{user_id}_{message.id}_{int(time.time())}"
+    unique_id = base64.urlsafe_b64encode(raw_id.encode()).decode().rstrip("=")
+
+    await db.save_stored_file(unique_id, file_id, message.id, message.chat.id, user_id, "single")
+
+    direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
+
+    final_link = direct_link
+    if sl_status and sl_url and sl_api:
+        short = await shorten_url(sl_url, sl_api, direct_link)
+        if short:
+            final_link = short
+
+    buttons = [
+        [InlineKeyboardButton("🔗 Open Link", url=final_link)],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
+    ]
+    await message.reply_text(
+        f"✅ **File Stored Successfully!**\n\n🔗 **Link:**\n`{final_link}`",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
+    )
+
+
+# ==========================================================
+# 🔹 HANDLE BATCH FILE
+# ==========================================================
+@Client.on_message(filters.private, group=2)
+async def handle_clone_batch(client: Client, message: Message):
+    user_id = message.from_user.id
+    if user_states.get(user_id) != "waiting_for_batch_file":
+        return
+    if message.text and message.text.startswith("/"):
+        return
+    if not message.forward_from_chat and not message.forward_from:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+        return await message.reply_text(
+            "⚠️ Please forward a message from your batch channel.",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
-    fsub_states[user_id] = {
-        "state": "waiting_fsub_mode",
-        "chat_id": chat.id,
-        "chat_name": chat.title
+    user_states.pop(user_id, None)
+    from_chat_id = None
+    if message.forward_from_chat:
+        from_chat_id = message.forward_from_chat.id
+    elif message.forward_from:
+        from_chat_id = message.forward_from.id
+
+    start_id = message.forward_from_message_id or message.id
+
+    user_states[user_id] = {
+        "state": "waiting_for_batch_count",
+        "from_chat_id": from_chat_id,
+        "start_id": start_id
     }
 
-    text = "sᴇʟᴇᴄᴛ ʏᴏᴜʀ ᴍᴏᴅᴇ ᴡʜɪᴄʜ ʏᴏᴜ ᴡᴀɴᴛ ғᴏʀ ᴛʜɪs ʙᴇʟᴏᴡ 👇"
-    buttons = [
-        [InlineKeyboardButton("Normal", callback_data="fsub_mode_normal"),
-         InlineKeyboardButton("Request Channel", callback_data="fsub_mode_request")]
-    ]
-    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex("^fsub_mode_(normal|request)$"))
-async def fsub_set_mode(client: Client, callback_query: CallbackQuery):
-    mode = callback_query.data.split("_")[-1]
-    user_id = callback_query.from_user.id
-    state = fsub_states.get(user_id)
-    if not isinstance(state, dict) or state.get("state") != "waiting_fsub_mode":
-        return await callback_query.answer("Session expired.", show_alert=True)
-
-    bot_username = (await client.get_me()).username
-    await db.add_force_channel(bot_username, state["chat_id"], state["chat_name"], mode)
-    fsub_states.pop(user_id, None)
-
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-    await callback_query.message.edit_text(
-        f"✅ **{state['chat_name']}** added as **{mode.title()}** mode.",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-
-# ==========================================================
-# 🔹 TOGGLE ON/OFF
-# ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_toggle$"))
-async def fsub_toggle(client: Client, callback_query: CallbackQuery):
-    bot_username = (await client.get_me()).username
-    current = await db.get_fsub_status(bot_username)
-    await db.set_fsub_status(bot_username, not current)
-    await callback_query.answer(
-        f"Force Sub {'ON ✅' if not current else 'OFF ❌'}",
-        show_alert=True
-    )
-    await fsub_menu(client, callback_query)
-
-# ==========================================================
-# 🔹 FORCE SUB MESSAGE MENU
-# ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_msg$"))
-async def fsub_msg_menu(client: Client, callback_query: CallbackQuery):
-    text = (
-        "📝 **FORCE SUBSCRIBE MESSAGE:**\n\n"
-        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ: ʏᴏᴜ ᴄᴀɴ ᴄᴜsᴛᴏᴍɪsᴇ ʏᴏᴜʀ "
-        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ ᴀɴʏ ᴡᴀʏ ʏᴏᴜ ʟɪᴋᴇ."
-    )
-    buttons = [
-        [InlineKeyboardButton("Set Subscribe Text", callback_data="fsub_set_text")],
-        [InlineKeyboardButton("Set Image", callback_data="fsub_set_image")],
-        [InlineKeyboardButton("Force Channel Button", callback_data="fsub_set_buttons")],
-        [InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]
-    ]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex("^fsub_set_text$"))
-async def fsub_set_text(client: Client, callback_query: CallbackQuery):
-    fsub_states[callback_query.from_user.id] = "waiting_fsub_text"
-    text = (
-        "sᴇɴᴅ ᴍᴇ ᴀ ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴛᴇxᴛ...\n\n"
-        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss"
-    )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex("^fsub_set_image$"))
-async def fsub_set_image(client: Client, callback_query: CallbackQuery):
-    fsub_states[callback_query.from_user.id] = "waiting_fsub_image"
-    text = (
-        "🖼️ sᴇɴᴅ ᴍᴇ ᴀɴ ɪᴍᴀɢᴇ ғᴏʀ ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ...\n\n"
-        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss"
-    )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex("^fsub_set_buttons$"))
-async def fsub_set_buttons(client: Client, callback_query: CallbackQuery):
-    fsub_states[callback_query.from_user.id] = "waiting_fsub_buttons"
-    text = (
-        "🔘 **Send me buttons in this format:**\n\n"
-        "`Button Text - https://link.com`\n\n"
-        "One button per line. Multiple lines allowed.\n\n"
-        "/cancel - Cancel"
-    )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-# ==========================================================
-# 🔹 RECEIVE TEXT / BUTTONS
-# ==========================================================
-@Client.on_message(
-    filters.private & filters.text & ~filters.command(["cancel", "start"]),
-    group=91
-)
-async def fsub_receive_text(client: Client, message: Message):
-    user_id = message.from_user.id
-    state = fsub_states.get(user_id)
-    bot_username = (await client.get_me()).username
-
-    if state == "waiting_fsub_text":
-        await db.set_fsub_text(bot_username, message.text)
-        fsub_states.pop(user_id, None)
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-        return await message.reply_text(
-            "✅ Force Sub text saved.",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-    if state == "waiting_fsub_buttons":
-        lines = message.text.strip().split("\n")
-        parsed = []
-        for line in lines:
-            if " - " in line:
-                txt, url = line.split(" - ", 1)
-                parsed.append({"text": txt.strip(), "url": url.strip()})
-        if not parsed:
-            return await message.reply_text(
-                "❌ Invalid format. Use: Button Text - https://link.com"
-            )
-        await db.set_fsub_buttons(bot_username, parsed)
-        fsub_states.pop(user_id, None)
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
-        return await message.reply_text(
-            "✅ Buttons saved.",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-
-# ==========================================================
-# 🔹 RECEIVE IMAGE
-# ==========================================================
-@Client.on_message(filters.private & filters.photo, group=92)
-async def fsub_receive_image(client: Client, message: Message):
-    user_id = message.from_user.id
-    if fsub_states.get(user_id) != "waiting_fsub_image":
-        return
-    bot_username = (await client.get_me()).username
-    await db.set_fsub_image(bot_username, message.photo.file_id)
-    fsub_states.pop(user_id, None)
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="fsub_msg")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
-        "✅ Force Sub image saved.",
+        "📦 **How many files?** Send a number.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 
 # ==========================================================
-# 🔹 AUTO ADD CHANNELS
+# 🔹 HANDLE BATCH COUNT
 # ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_auto_add$"))
-async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
-    fsub_states[callback_query.from_user.id] = "waiting_auto_channels"
-    text = (
-        "🤖 **AUTO ADD CHANNELS**\n\n"
-        "Send me channel IDs (one per line) to add as force-subscribe channels.\n\n"
-        "**Format:**\n"
-        "`-1001234567890`\n"
-        "`-1009876543210`\n\n"
-        "⚠️ **Warning:** Manual ID method is unreliable. Use **Add Channel** (forward method) instead.\n\n"
-        "/cancel - Cancel this process"
-    )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
-
-
-@Client.on_message(
-    filters.private & filters.text & ~filters.command(["cancel", "start"]),
-    group=93
-)
-async def fsub_receive_auto_channels(client: Client, message: Message):
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=3)
+async def handle_clone_batch_count(client: Client, message: Message):
     user_id = message.from_user.id
-    if fsub_states.get(user_id) != "waiting_auto_channels":
+    state = user_states.get(user_id)
+    if not isinstance(state, dict) or state.get("state") != "waiting_for_batch_count":
         return
 
+    try:
+        count = int(message.text.strip())
+        if count < 1 or count > 500:
+            raise ValueError
+    except ValueError:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+        return await message.reply_text("⚠️ Invalid number (1-500).", reply_markup=InlineKeyboardMarkup(buttons))
+
     bot_username = (await client.get_me()).username
-    lines = message.text.strip().split("\n")
-    added = []
-    failed = []
 
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            chat_id = int(line)
-            chat = await client.get_chat(chat_id)
-            member = await client.get_chat_member(chat_id, "me")
-            status_str = str(member.status).split(".")[-1].lower()
-            if status_str not in ("administrator", "creator", "owner"):
-                failed.append(f"{chat.title} (not admin)")
-                continue
-            await db.add_force_channel(bot_username, chat_id, chat.title, "normal")
-            added.append(chat.title)
-        except Exception as e:
-            failed.append(f"{line} ({str(e)[:40]})")
+    # Force Sub gate
+    fsub_status = await db.get_fsub_status(bot_username)
+    if fsub_status:
+        not_joined = await check_subscription(client, user_id, bot_username)
+        if not_joined:
+            fsub_text = await db.get_fsub_text(bot_username)
+            fsub_img = await db.get_fsub_image(bot_username)
+            keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
 
-    fsub_states.pop(user_id, None)
+            default_text = (
+                "📢 **Please Join Our Channels**\n\n"
+                "To use this bot, you must join the channels below.\n"
+                "After joining, click **✅ I Joined**."
+            )
+            msg_text = fsub_text or default_text
 
-    result = "✅ **Auto Add Result**\n\n"
-    if added:
-        result += f"**Added ({len(added)}):**\n"
-        for ch in added:
-            result += f"• {ch}\n"
-        result += "\n"
-    if failed:
-        result += f"**Failed ({len(failed)}):**\n"
-        for ch in failed:
-            result += f"• {ch}\n"
+            if fsub_img:
+                await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
+            else:
+                await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
+            return
 
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_force_sub")]]
-    await message.reply_text(result, reply_markup=InlineKeyboardMarkup(buttons))
+    # Verification gate
+    if await needs_verification(user_id, bot_username):
+        v_url = await db.get_verify_shortlink_url(bot_username)
+        v_api = await db.get_verify_shortlink_api(bot_username)
+        tutorial = await db.get_verify_tutorial(bot_username)
+
+        direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
+        short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
+
+        buttons = []
+        if short:
+            buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
+        if tutorial:
+            buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
+
+        return await message.reply_text(
+            f"ʜᴇʏ {message.from_user.first_name}\n\n"
+            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
+            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
+        )
+
+    # Batch processing
+    from_chat_id = state["from_chat_id"]
+    start_id = state["start_id"]
+    user_states.pop(user_id, None)
+
+    raw_id = f"batch_{user_id}_{start_id}_{int(time.time())}"
+    unique_id = base64.urlsafe_b64encode(raw_id.encode()).decode().rstrip("=")
+
+    await db.save_batch(unique_id, from_chat_id, start_id, count, user_id)
+
+    direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
+
+    final_link = direct_link
+    if sl_status and sl_url and sl_api:
+        short = await shorten_url(sl_url, sl_api, direct_link)
+        if short:
+            final_link = short
+
+    buttons = [
+        [InlineKeyboardButton("🔗 Open Batch", url=final_link)],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
+    ]
+    await message.reply_text(
+        f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
+    )
 
 
 # ==========================================================
-# 🔹 USER PRESSES "I JOINED" BUTTON
+# 🔹 VERIFICATION CALLBACK
 # ==========================================================
-@Client.on_callback_query(filters.regex("^fsub_check$"))
-async def fsub_check(client: Client, callback_query: CallbackQuery):
+@Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
+async def handle_verify_callback(client: Client, message: Message):
+    user_id = int(message.matches[0].group(1))
     bot_username = (await client.get_me()).username
-    not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
+    await mark_verified(user_id, bot_username)
+    await message.reply_text(
+        "✅ **Verification Complete!**\n\nNow you can download files."
+    )
 
-    if not not_joined:
-        await callback_query.answer("✅ Verified!", show_alert=True)
-        try:
-            await callback_query.message.delete()
-        except Exception:
-            pass
-        await callback_query.message.reply_text(
-            "✅ **Verification Complete!**\n\nYou can now send files again."
-        )
-    else:
-        await callback_query.answer(
-            "⚠️ You haven't joined all channels yet.",
-            show_alert=True
-        )
+
+# ==========================================================
+# 🔹 CANCEL
+# ==========================================================
+@Client.on_message(filters.command("cancel") & filters.private)
+async def clone_cancel(client: Client, message: Message):
+    user_id = message.from_user.id
+    if user_id in user_states:
+        user_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+        await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
