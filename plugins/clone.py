@@ -1,12 +1,12 @@
 # plugins/clone.py
 from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import API_ID, API_HASH
 from database import db
+from utils.logger import log_clone_created
 import asyncio
 import re
 
-# Store active clone clients in memory
 active_clones = {}
 
 
@@ -15,24 +15,17 @@ active_clones = {}
 # ==========================================================
 @Client.on_message(filters.command("clone") & filters.private)
 async def clone_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
     user_id = message.from_user.id
     clone = await db.get_clone(user_id)
 
     if clone:
-        # Show clone menu with existing bot
         text = (
             "🛠️ **CLONE MENU**\n\n"
-            "ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ʜᴜʙ! ᴄᴜsᴛᴏᴍɪᴢᴇ ʏᴏᴜʀ ʙᴏᴛ sᴇᴛᴛɪɴɢs ᴏʀ ᴍᴀɴᴀɢᴇ ɪᴛs sᴛᴀᴛᴜs ᴜsɪɴɢ ᴛʜᴇ ᴏᴘᴛɪᴏɴs ʙᴇʟᴏᴡ.\n\n"
-            "⚙️ **QUICK COMMANDS**\n\n"
+            "ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ ʜᴜʙ!\n"
+            "ᴄᴜsᴛᴏᴍɪᴢᴇ ʏᴏᴜʀ ʙᴏᴛ sᴇᴛᴛɪɴɢs ᴏʀ ᴍᴀɴᴀɢᴇ ɪᴛs sᴛᴀᴛᴜs.\n\n"
+            "⚙️ **QUICK COMMANDS**\n"
             "🚀 /activate — ᴀᴄᴛɪᴠᴀᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ\n"
-            "🗑️ /delete — ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ᴅᴇʟᴇᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ\n\n"
-            "🎨 **BOT CUSTOMIZATION**\n\n"
-            "✨ ᴄʟɪᴄᴋ ᴛʜᴇ ʙᴜᴛᴛᴏɴ ʙᴇʟᴏᴡ ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ ᴀɴᴅ ᴍᴏᴅɪғʏ ɪᴛs sᴇᴛᴛɪɴɢs, ᴡᴇʟᴄᴏᴍᴇ ᴍᴇssᴀɢᴇ, ᴀɴᴅ ғᴇᴀᴛᴜʀᴇs!"
+            "🗑️ /delete — ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ᴅᴇʟᴇᴛᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ ʙᴏᴛ"
         )
         buttons = [
             [InlineKeyboardButton(
@@ -54,7 +47,7 @@ async def clone_cmd(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 TOKEN DETECTION (Forwarded Message)
+# 🔹 RECEIVE TOKEN
 # ==========================================================
 @Client.on_message(
     filters.private & filters.text &
@@ -64,14 +57,12 @@ async def receive_token(client: Client, message: Message):
     user_id = message.from_user.id
     text = message.text or ""
 
-    # Search anywhere in the message (handles "Forwarded from BotFather" header)
     token_match = re.search(r"(\d{9,11}:[A-Za-z0-9_-]{30,50})", text)
     if not token_match:
-        return  # Not a token, ignore silently
+        return
 
     token = token_match.group(1)
 
-    # Validate the token by starting a temp client
     try:
         temp_client = Client(
             f"temp_{user_id}",
@@ -85,20 +76,29 @@ async def receive_token(client: Client, message: Message):
         await temp_client.stop()
     except Exception as e:
         return await message.reply_text(
-            f"❌ **Invalid Token**\n\nError: `{e}`\n\n"
-            "Make sure you copied the full token from @BotFather."
+            f"❌ **Invalid Token**\n\nError: `{e}`"
         )
 
-    # Save to DB
     await db.save_clone_token(user_id, token, bot_info.username)
 
-    # Spawn the clone bot
+    # ==========================================================
+    # 🔹 MASTER LOG — Clone Created
+    # ==========================================================
+    try:
+        await log_clone_created(
+            client=client,
+            owner_id=user_id,
+            clone_username=bot_info.username,
+            owner_username=message.from_user.username
+        )
+    except Exception as e:
+        print(f"Clone creation log failed: {e}")
+
     asyncio.create_task(start_clone_bot(token, user_id, bot_info.username))
 
     await message.reply_text(
         f"✅ **CONGRATULATIONS!**\n\n"
         f"Your @{bot_info.username} bot is successfully created.\n\n"
-        f"🔗 Open it: https://t.me/{bot_info.username}\n\n"
         f"Use /clone command to manage it."
     )
 
@@ -107,7 +107,6 @@ async def receive_token(client: Client, message: Message):
 # 🔹 CLONE BOT SPAWNER
 # ==========================================================
 async def start_clone_bot(token: str, owner_id: int, username: str):
-    """Starts a new Pyrogram client for the clone in the background."""
     try:
         clone_app = Client(
             name=f"clone_{owner_id}_{username}",
@@ -115,7 +114,7 @@ async def start_clone_bot(token: str, owner_id: int, username: str):
             api_hash=API_HASH,
             bot_token=token,
             plugins=dict(root="clone_plugins"),
-            in_memory=True  # CRITICAL: no session files on Koyeb
+            in_memory=True
         )
         await clone_app.start()
         active_clones[owner_id] = clone_app
@@ -128,7 +127,7 @@ async def start_clone_bot(token: str, owner_id: int, username: str):
 # 🔹 CREATE CLONE CALLBACK
 # ==========================================================
 @Client.on_callback_query(filters.regex("create_clone"))
-async def create_clone_cb(client: Client, callback_query: CallbackQuery):
+async def create_clone_cb(client: Client, callback_query):
     user_id = callback_query.from_user.id
     clone = await db.get_clone(user_id)
 
@@ -199,7 +198,7 @@ async def delete_cmd(client: Client, message: Message):
 # 🔹 CANCEL ACTION
 # ==========================================================
 @Client.on_callback_query(filters.regex("cancel_action"))
-async def cancel_cb(client: Client, callback_query: CallbackQuery):
+async def cancel_cb(client: Client, callback_query):
     await callback_query.message.delete()
     await callback_query.answer("Cancelled.")
 
@@ -208,14 +207,13 @@ async def cancel_cb(client: Client, callback_query: CallbackQuery):
 # 🔹 CONFIRM DELETE
 # ==========================================================
 @Client.on_callback_query(filters.regex("confirm_delete"))
-async def confirm_delete_cb(client: Client, callback_query: CallbackQuery):
+async def confirm_delete_cb(client: Client, callback_query):
     user_id = callback_query.from_user.id
     clone = await db.get_clone(user_id)
 
     if not clone:
         return await callback_query.answer("No clone found.", show_alert=True)
 
-    # Stop the running clone client
     if user_id in active_clones:
         try:
             await active_clones[user_id].stop()
@@ -223,7 +221,6 @@ async def confirm_delete_cb(client: Client, callback_query: CallbackQuery):
         except Exception:
             pass
 
-    # Remove from DB
     await db.clones.delete_one({"user_id": user_id})
 
     await callback_query.message.edit_text(
