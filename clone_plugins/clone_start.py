@@ -2,6 +2,7 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
+from utils.fsub_middleware import check_force_sub
 import asyncio
 import psutil
 import time
@@ -20,9 +21,6 @@ async def clone_start(client: Client, message: Message):
     bot_mention = f"@{bot_username}"
     user_mention = message.from_user.mention
 
-    # ==========================================================
-    # 🔹 LOG CHANNEL NOTIFICATION
-    # ==========================================================
     clone_data = await db.get_clone_by_username(bot_username)
     if clone_data and clone_data.get("log_channel"):
         try:
@@ -36,9 +34,7 @@ async def clone_start(client: Client, message: Message):
         except Exception as e:
             print(f"Log channel error: {e}")
 
-    # ==========================================================
-    # 🔹 FORCE SUBSCRIBE GATE — sirf normal /start pe
-    # ==========================================================
+    # Force Sub gate — sirf normal /start pe
     is_deep_link = message.text and " " in message.text
     if not is_deep_link:
         fsub_status = await db.get_fsub_status(bot_username)
@@ -55,28 +51,17 @@ async def clone_start(client: Client, message: Message):
                     "After joining, click **✅ I Joined**."
                 )
                 if fsub_img:
-                    await message.reply_photo(
-                        photo=fsub_img,
-                        caption=msg_text,
-                        reply_markup=keyboard
-                    )
+                    await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
                 else:
-                    await message.reply_text(
-                        msg_text,
-                        reply_markup=keyboard,
-                        disable_web_page_preview=True
-                    )
+                    await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
                 return
 
-    # ==========================================================
-    # 🔹 DEEP LINK HANDLER
-    # ==========================================================
+    # Deep link handler
     if message.text and " " in message.text:
         parts = message.text.split(maxsplit=1)
         if len(parts) > 1:
             payload = parts[1].strip()
 
-            # --- Customize menu ---
             if payload == "customize":
                 if clone_data and clone_data["user_id"] == user_id:
                     await send_clone_settings(message)
@@ -84,7 +69,6 @@ async def clone_start(client: Client, message: Message):
                 else:
                     return await message.reply_text("⚠️ Only the bot owner can customize this bot.")
 
-            # --- Batch check ---
             batch_data = await db.get_batch(payload)
             if batch_data:
                 await message.reply_text(f"📦 Sending {batch_data['count']} files...")
@@ -99,7 +83,6 @@ async def clone_start(client: Client, message: Message):
                         print(f"Batch error: {e}")
                 return
 
-            # --- Single file check ---
             stored = await db.get_stored_file(payload)
             if stored:
                 if stored["type"] == "single":
@@ -110,15 +93,12 @@ async def clone_start(client: Client, message: Message):
                         await message.reply_cached_media(fid, caption="📁 **Here is your file**")
                 return
 
-            # --- Not found ---
             return await message.reply_text(
                 "❌ **Invalid or Expired Link**\n\n"
                 "This link doesn't point to any stored file."
             )
 
-    # ==========================================================
-    # 🔹 NORMAL /start — custom start message
-    # ==========================================================
+    # Normal /start — custom start message
     start_text = clone_data.get("start_text") if clone_data else None
     start_pic = clone_data.get("start_pic") if clone_data else None
     start_buttons = clone_data.get("start_buttons", []) if clone_data else []
@@ -157,29 +137,28 @@ async def clone_start(client: Client, message: Message):
     else:
         await message.reply_text(formatted_text, reply_markup=reply_markup)
 
+
 # ==========================================================
 # 🔹 /help
 # ==========================================================
 @Client.on_message(filters.command("help") & filters.private)
 async def clone_help_cmd(client: Client, message: Message):
-    await send_clone_help(message)
-    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
+    await send_clone_help(message)
 
 
 @Client.on_callback_query(filters.regex("^c_help$"))
 async def clone_help_cb(client: Client, callback_query: CallbackQuery):
     await send_clone_help(callback_query.message, edit=True)
-    from utils.fsub_middleware import check_force_sub
-    if not await check_force_sub(client, message, bot_username):
-        return
+
 
 async def send_clone_help(message, edit=False):
     text = (
         "🎓 **HELP MENU:**\n\n"
         "🤖 ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ\n"
-        "📨 ᴍʏ ɴᴀᴍᴇ ɪꜱ ꜰɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ, ʙᴜᴛ ɪ ᴄᴀɴ ꜱᴛᴏʀᴇ ᴀɴʏ ᴛʏᴘᴇ ᴏꜰ ᴄᴏɴᴛᴇɴᴛ.\n"
+        "📨 ᴍʏ ɴᴀᴍᴇ ɪꜱ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ, ʙᴜᴛ ɪ ᴄᴀɴ ꜱᴛᴏʀᴇ ᴀɴʏ ᴛʏᴘᴇ ᴏꜰ ᴄᴏɴᴛᴇɴᴛ.\n"
         "📂 ʏᴏᴜ ᴄᴀɴ ꜱᴛᴏʀᴇ ꜰɪʟᴇꜱ ꜰʀᴏᴍ ʏᴏᴜʀ ᴘᴜʙʟɪᴄ ᴄʜᴀɴɴᴇʟ.\n"
         "🔐 ɪꜰ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ɪꜱ ᴘʀɪᴠᴀᴛᴇ, ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ.\n"
         "🔗 ᴀꜰᴛᴇʀ ꜱᴛᴏʀɪɴɢ, ɪ ᴡɪʟʟ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ꜱʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ.\n\n"
@@ -220,13 +199,10 @@ async def send_clone_help(message, edit=False):
 
 
 # ==========================================================
-# 🔹 /about
+# 🔹 ABOUT CALLBACK
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_about$"))
 async def clone_about_cb(client: Client, callback_query: CallbackQuery):
-    from utils.fsub_middleware import check_force_sub
-    if not await check_force_sub(client, message, bot_username):
-        return
     text = (
         "○ **Creator** : King VJ\n"
         "○ **Language** : Python3\n"
@@ -247,9 +223,10 @@ async def clone_about_cb(client: Client, callback_query: CallbackQuery):
 # ==========================================================
 @Client.on_message(filters.command("id") & filters.private)
 async def clone_id_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
+
     user = message.from_user
     text = (
         "User Details :\n\n\n"
@@ -266,14 +243,14 @@ async def clone_id_cmd(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /settings — USER SETTINGS MENU
+# 🔹 /settings
 # ==========================================================
 @Client.on_message(filters.command("settings") & filters.private)
 async def user_settings_cmd(client: Client, message: Message):
-    await send_user_settings(message)
-    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
+    await send_user_settings(message)
 
 
 @Client.on_callback_query(filters.regex("^c_settings$"))
@@ -307,18 +284,16 @@ async def send_user_settings(message, edit=False):
     else:
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-
 # ==========================================================
-# 🔹 /customize — CLONE OWNER MENU
+# 🔹 /customize
 # ==========================================================
 @Client.on_message(filters.command("customize") & filters.private)
 async def customize_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
 
+    clone_data = await db.get_clone_by_username(bot_username)
     if not clone_data or clone_data["user_id"] != message.from_user.id:
         return await message.reply_text("⚠️ Only the bot owner can use this command.")
 
@@ -355,6 +330,7 @@ async def send_clone_settings(message, edit=False):
     else:
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
+
 # ==========================================================
 # 🔹 USER SETTINGS CALLBACK HANDLER
 # ==========================================================
@@ -376,7 +352,7 @@ async def user_setting_handler(client: Client, callback_query: CallbackQuery):
 
 
 # ==========================================================
-# 🔹 LOG CHANNEL MENU (Clone Bot)
+# 🔹 LOG CHANNEL MENU
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
@@ -446,14 +422,9 @@ async def receive_log_channel(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # ==========================================================
-    # 🔹 ADMIN CHECK (Fixed Enum Comparison)
-    # ==========================================================
     try:
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
-
-        # ✅ Convert enum to string
         status_str = str(member.status).split(".")[-1].lower()
 
         print(f"DEBUG LOG: Bot @{me.username} status in {chat.title}: {status_str}")
@@ -495,7 +466,6 @@ async def delete_log_channel(client: Client, callback_query: CallbackQuery):
         await db.update_clone_setting(clone_data["user_id"], "log_channel", None)
     await callback_query.answer("✅ Deleted.", show_alert=True)
     await log_channel_menu(client, callback_query)
-
 
 # ==========================================================
 # 🔹 DATABASE CHANNEL MENU
@@ -564,8 +534,6 @@ async def receive_db_channel(client: Client, message: Message):
     try:
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
-
-        # ✅ Convert enum to string
         status_str = str(member.status).split(".")[-1].lower()
 
         print(f"DEBUG DB: Bot @{me.username} status in {chat.title}: {status_str}")
@@ -594,96 +562,9 @@ async def receive_db_channel(client: Client, message: Message):
 
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
     await message.reply_text(
-        f"✅ **DB Channel Set:** {chat.title}",
+        f"✅ **Database Channel Set:** {chat.title}",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
-
-
-@Client.on_callback_query(filters.regex("^c_delete_db$"))
-async def delete_db_channel(client: Client, callback_query: CallbackQuery):
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-    if clone_data:
-        await db.update_clone_setting(clone_data["user_id"], "db_channel", None)
-    await callback_query.answer("✅ Deleted.", show_alert=True)
-    await db_channel_menu(client, callback_query)
-
-# ==========================================================
-# 🔹 DATABASE CHANNEL
-# ==========================================================
-@Client.on_callback_query(filters.regex("^c_db_channel$"))
-async def db_channel_menu(client: Client, callback_query: CallbackQuery):
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-    db_channel = clone_data.get("db_channel") if clone_data else None
-
-    text = "☁️ **DATABASE CHANNEL:**\n\n"
-    if db_channel:
-        text += f"✅ **Current:** `{db_channel}`"
-    else:
-        text += "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ❗️"
-
-    buttons = [
-        [InlineKeyboardButton("Set Database Channel", callback_data="c_set_db")],
-        [InlineKeyboardButton("Delete Channel", callback_data="c_delete_db")],
-        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
-    ]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
-@Client.on_callback_query(filters.regex("^c_set_db$"))
-async def set_db_channel(client: Client, callback_query: CallbackQuery):
-    user_id = callback_query.from_user.id
-    edit_states[user_id] = "waiting_for_db_channel"
-    bot_username = (await client.get_me()).username
-
-    text = (
-        f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ,\n"
-        f"ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ ɪɴ ɪᴛ.\n\n"
-        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
-    )
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
-@Client.on_message(filters.private, group=22)
-async def receive_db_channel(client: Client, message: Message):
-    user_id = message.from_user.id
-    if edit_states.get(user_id) != "waiting_for_db_channel":
-        return
-    if message.text and message.text.startswith("/"):
-        edit_states.pop(user_id, None)
-        return
-    if not message.forward_from_chat:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-        return await message.reply_text("⚠️ Please forward a message from the channel.", reply_markup=InlineKeyboardMarkup(buttons))
-
-    chat = message.forward_from_chat
-    chat_type = str(chat.type).lower().replace("chattype.", "")
-    if chat_type not in ("channel", "supergroup"):
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-        return await message.reply_text("⚠️ Only channels/supergroups allowed.", reply_markup=InlineKeyboardMarkup(buttons))
-
-    bot_username = (await client.get_me()).username
-    try:
-        member = await client.get_chat_member(chat.id, "me")
-        if member.status not in ("administrator", "creator", "owner"):
-            buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-            return await message.reply_text(
-                f"⚠️ @{bot_username} is not admin in **{chat.title}**.",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-    except Exception as e:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-        return await message.reply_text(f"⚠️ Error: `{e}`", reply_markup=InlineKeyboardMarkup(buttons))
-
-    edit_states.pop(user_id, None)
-    clone_data = await db.get_clone_by_username(bot_username)
-    if clone_data:
-        await db.update_clone_setting(clone_data["user_id"], "db_channel", chat.id)
-
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-    await message.reply_text(f"✅ **DB Channel Set:** {chat.title}", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_callback_query(filters.regex("^c_delete_db$"))
@@ -980,6 +861,7 @@ async def clone_broadcast(client: Client, message: Message):
             pass
     await status.edit_text(f"✅ Sent to {success}/{len(users)} users.")
 
+
 # ==========================================================
 # 🔹 /ban and /unban
 # ==========================================================
@@ -1016,6 +898,7 @@ async def clone_unban(client: Client, message: Message):
     await db.unban_user(target)
     await message.reply_text(f"✅ User {target} unbanned.")
 
+
 # ==========================================================
 # 🔹 VIEW PLANS CALLBACK
 # ==========================================================
@@ -1043,6 +926,9 @@ async def c_plan_callback(client: Client, callback_query: CallbackQuery):
 # ==========================================================
 # 🔹 MY PLAN CALLBACK
 # ==========================================================
+# ==========================================================
+# 🔹 MY PLAN CALLBACK
+# ==========================================================
 @Client.on_callback_query(filters.regex("^c_myplan$"))
 async def c_myplan_callback(client: Client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
@@ -1050,10 +936,60 @@ async def c_myplan_callback(client: Client, callback_query: CallbackQuery):
     is_premium = await db.is_premium_user(user_id, bot_username)
 
     if is_premium:
-        text = "💎 **My Premium Status**\n\n✅ **Status:** Premium (Active)\n🎁 Unlimited access."
+        text = (
+            "💎 **My Premium Status**\n\n"
+            "✅ **Status:** Premium (Active)\n"
+            "🎁 Unlimited access."
+        )
     else:
-        text = "💎 **My Premium Status**\n\n📌 **Status:** Free\n🆓 Limit: 5 files/day\n\nType /plan to see plans."
+        text = (
+            "💎 **My Premium Status**\n\n"
+            "📌 **Status:** Free\n"
+            "🆓 Limit: 5 files/day\n\n"
+            "Type /plan to see plans."
+        )
 
-    buttons = [[InlineKeyboardButton("💎 View Plans", callback_data="c_plan")],
-               [InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    buttons = [
+        [InlineKeyboardButton("💎 View Plans", callback_data="c_plan")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
+    ]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 VERIFY CALLBACK
+# ==========================================================
+@Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
+async def handle_verify_callback(client: Client, message: Message):
+    user_id = int(message.matches[0].group(1))
+    bot_username = (await client.get_me()).username
+    from utils.verify_helper import mark_verified
+    await mark_verified(user_id, bot_username)
+    await message.reply_text(
+        "✅ **Verification Complete!**\n\nNow you can download files."
+    )
+
+
+# ==========================================================
+# 🔹 FSUB CHECK CALLBACK
+# ==========================================================
+@Client.on_callback_query(filters.regex("^fsub_check$"))
+async def fsub_check(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    from utils.fsub_helper import check_subscription
+    not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
+
+    if not not_joined:
+        await callback_query.answer("✅ Verified!", show_alert=True)
+        try:
+            await callback_query.message.delete()
+        except Exception:
+            pass
+        await callback_query.message.reply_text(
+            "✅ **Verification Complete!**\n\nYou can now send files again."
+        )
+    else:
+        await callback_query.answer(
+            "⚠️ You haven't joined all channels yet.",
+            show_alert=True
+        )
