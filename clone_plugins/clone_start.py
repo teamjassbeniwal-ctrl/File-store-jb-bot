@@ -309,7 +309,7 @@ async def send_clone_settings(message, edit=False):
 # ==========================================================
 # 🔹 USER SETTINGS CALLBACK HANDLER
 # ==========================================================
-@Client.on_callback_query(filters.regex("^u_(free_limit|refer|shortner|token_verify|force_sub|caption|thumbnail|button|auto_delete|permanent_link|protect_content)$"))
+@Client.on_callback_query(filters.regex("^u_(free_limit|refer|force_sub|caption|thumbnail|button|auto_delete|permanent_link|protect_content)$"))
 async def user_setting_handler(client: Client, callback_query: CallbackQuery):
     key = callback_query.data.replace("u_", "")
     messages = {
