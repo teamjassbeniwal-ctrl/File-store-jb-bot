@@ -4,7 +4,7 @@ from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineK
 from database import db
 import asyncio
 import os
-import psutila
+import psutil
 import time
 
 # Temporary edit states
