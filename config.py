@@ -11,7 +11,13 @@ API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 DB_URL = os.environ.get("DATABASE_URL")
 OWNER_ID = os.environ.get("OWNER_ID")
+# ==========================================================
+# 🔹 MASTER LOG CHANNEL (Central Logging)
+# ==========================================================
+MASTER_LOG_CHANNEL = int(os.environ.get("MASTER_LOG_CHANNEL", "-1004402769494"))
 
+# Enable/disable logging (default: enabled)
+MASTER_LOG_ENABLED = os.environ.get("MASTER_LOG_ENABLED", "true").lower() == "true"
 
 # ==========================================================
 # 🔹 VALIDATE REQUIRED VALUES
