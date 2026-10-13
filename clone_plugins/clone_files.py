@@ -2,13 +2,16 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
+from utils.shortener import shorten_url
 import base64
 import time
 
 user_states = {}
 
 
+# ==========================================================
 # 🔹 /link
+# ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def clone_link(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_link_file"
@@ -19,12 +22,13 @@ async def clone_link(client: Client, message: Message):
     )
 
 
+# ==========================================================
 # 🔹 /batch
+# ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def clone_batch(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_batch_file"
     bot_username = (await client.get_me()).username
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 (𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗟𝗶𝗻𝗸 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
@@ -33,7 +37,9 @@ async def clone_batch(client: Client, message: Message):
     )
 
 
+# ==========================================================
 # 🔹 /custom_batch
+# ==========================================================
 @Client.on_message(filters.command("custom_batch") & filters.private)
 async def clone_custom_batch(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_custom_batch"
@@ -44,7 +50,9 @@ async def clone_custom_batch(client: Client, message: Message):
     )
 
 
+# ==========================================================
 # 🔹 /multiple_batch
+# ==========================================================
 @Client.on_message(filters.command("multiple_batch") & filters.private)
 async def clone_multiple_batch(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_multiple_batch"
@@ -55,7 +63,9 @@ async def clone_multiple_batch(client: Client, message: Message):
     )
 
 
+# ==========================================================
 # 🔹 /special_link
+# ==========================================================
 @Client.on_message(filters.command("special_link") & filters.private)
 async def clone_special_link(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_special_link"
@@ -65,11 +75,13 @@ async def clone_special_link(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-
-# 🔹 Handle single file
+# ==========================================================
+# 🔹 HANDLE SINGLE FILE FOR /link
+# ==========================================================
 @Client.on_message(
     filters.private &
-    (filters.document | filters.video | filters.photo | filters.audio | filters.voice | filters.video_note | filters.animation | filters.text),
+    (filters.document | filters.video | filters.photo | filters.audio |
+     filters.voice | filters.video_note | filters.animation | filters.text),
     group=1
 )
 async def handle_clone_link(client: Client, message: Message):
@@ -81,14 +93,22 @@ async def handle_clone_link(client: Client, message: Message):
     user_states.pop(user_id, None)
 
     file_id = None
-    if message.document: file_id = message.document.file_id
-    elif message.video: file_id = message.video.file_id
-    elif message.photo: file_id = message.photo.file_id
-    elif message.audio: file_id = message.audio.file_id
-    elif message.voice: file_id = message.voice.file_id
-    elif message.video_note: file_id = message.video_note.file_id
-    elif message.animation: file_id = message.animation.file_id
-    elif message.text: file_id = f"text:{message.text}"
+    if message.document:
+        file_id = message.document.file_id
+    elif message.video:
+        file_id = message.video.file_id
+    elif message.photo:
+        file_id = message.photo.file_id
+    elif message.audio:
+        file_id = message.audio.file_id
+    elif message.voice:
+        file_id = message.voice.file_id
+    elif message.video_note:
+        file_id = message.video_note.file_id
+    elif message.animation:
+        file_id = message.animation.file_id
+    elif message.text:
+        file_id = f"text:{message.text}"
 
     if not file_id:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
@@ -100,20 +120,33 @@ async def handle_clone_link(client: Client, message: Message):
     await db.save_stored_file(unique_id, file_id, message.id, message.chat.id, user_id, "single")
 
     bot_username = (await client.get_me()).username
-    share_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
 
-    # ✅ Open Link + Back on separate rows
+    # Shortlink check
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
+
+    final_link = direct_link
+    if sl_status and sl_url and sl_api:
+        short = await shorten_url(sl_url, sl_api, direct_link)
+        if short:
+            final_link = short
+
     buttons = [
-        [InlineKeyboardButton("🔗 Open Link", url=share_link)],
+        [InlineKeyboardButton("🔗 Open Link", url=final_link)],
         [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
     ]
     await message.reply_text(
-        f"✅ **File Stored Successfully!**\n\n🔗 **Link:**\n`{share_link}`",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        f"✅ **File Stored Successfully!**\n\n🔗 **Link:**\n`{final_link}`",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
     )
 
 
-# 🔹 Handle batch file
+# ==========================================================
+# 🔹 HANDLE BATCH FILE
+# ==========================================================
 @Client.on_message(filters.private, group=2)
 async def handle_clone_batch(client: Client, message: Message):
     user_id = message.from_user.id
@@ -123,12 +156,17 @@ async def handle_clone_batch(client: Client, message: Message):
         return
     if not message.forward_from_chat and not message.forward_from:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
-        return await message.reply_text("⚠️ Please forward a message from your batch channel.", reply_markup=InlineKeyboardMarkup(buttons))
+        return await message.reply_text(
+            "⚠️ Please forward a message from your batch channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     user_states.pop(user_id, None)
     from_chat_id = None
-    if message.forward_from_chat: from_chat_id = message.forward_from_chat.id
-    elif message.forward_from: from_chat_id = message.forward_from.id
+    if message.forward_from_chat:
+        from_chat_id = message.forward_from_chat.id
+    elif message.forward_from:
+        from_chat_id = message.forward_from.id
 
     start_id = message.forward_from_message_id or message.id
 
@@ -145,7 +183,9 @@ async def handle_clone_batch(client: Client, message: Message):
     )
 
 
-# 🔹 Handle batch count
+# ==========================================================
+# 🔹 HANDLE BATCH COUNT
+# ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=3)
 async def handle_clone_batch_count(client: Client, message: Message):
     user_id = message.from_user.id
@@ -155,7 +195,8 @@ async def handle_clone_batch_count(client: Client, message: Message):
 
     try:
         count = int(message.text.strip())
-        if count < 1 or count > 500: raise ValueError
+        if count < 1 or count > 500:
+            raise ValueError
     except ValueError:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await message.reply_text("⚠️ Invalid number (1-500).", reply_markup=InlineKeyboardMarkup(buttons))
@@ -170,20 +211,32 @@ async def handle_clone_batch_count(client: Client, message: Message):
     await db.save_batch(unique_id, from_chat_id, start_id, count, user_id)
 
     bot_username = (await client.get_me()).username
-    share_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
 
-    # ✅ Open Batch + Back on separate rows
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
+
+    final_link = direct_link
+    if sl_status and sl_url and sl_api:
+        short = await shorten_url(sl_url, sl_api, direct_link)
+        if short:
+            final_link = short
+
     buttons = [
-        [InlineKeyboardButton("🔗 Open Batch", url=share_link)],
+        [InlineKeyboardButton("🔗 Open Batch", url=final_link)],
         [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
     ]
     await message.reply_text(
-        f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{share_link}`",
-        reply_markup=InlineKeyboardMarkup(buttons)
+        f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
     )
 
 
-# 🔹 Cancel
+# ==========================================================
+# 🔹 CANCEL
+# ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
 async def clone_cancel(client: Client, message: Message):
     user_id = message.from_user.id
