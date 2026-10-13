@@ -661,6 +661,133 @@ class Database:
         return u.get(f"verify_ts_{bot_key}") if u else None
 
 
+    # ==========================================================
+    # FORCE SUBSCRIBE (PER BOT)
+    # ==========================================================
+
+    async def add_force_channel(
+        self, bot_key, channel_id, channel_name, mode="normal"
+    ):
+        await self.settings.update_one(
+            {"key": f"fsub_{bot_key}"},
+            {
+                "$push": {
+                    "channels": {
+                        "id": channel_id,
+                        "name": channel_name,
+                        "mode": mode
+                    }
+                }
+            },
+            upsert=True
+        )
+
+    async def get_force_channels(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"fsub_{bot_key}"}
+        )
+        return r.get("channels", []) if r else []
+
+    async def remove_force_channel(self, bot_key, channel_id):
+        await self.settings.update_one(
+            {"key": f"fsub_{bot_key}"},
+            {
+                "$pull": {
+                    "channels": {"id": channel_id}
+                }
+            }
+        )
+
+    # ==========================================================
+    # FORCE SUBSCRIBE STATUS
+    # ==========================================================
+
+    async def set_fsub_status(self, bot_key, status: bool):
+        await self.settings.update_one(
+            {"key": f"fsub_status_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"fsub_status_{bot_key}",
+                    "value": status
+                }
+            },
+            upsert=True
+        )
+
+    async def get_fsub_status(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"fsub_status_{bot_key}"}
+        )
+        return r["value"] if r else False
+
+    # ==========================================================
+    # FORCE SUBSCRIBE TEXT
+    # ==========================================================
+
+    async def set_fsub_text(self, bot_key, text):
+        await self.settings.update_one(
+            {"key": f"fsub_text_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"fsub_text_{bot_key}",
+                    "value": text
+                }
+            },
+            upsert=True
+        )
+
+    async def get_fsub_text(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"fsub_text_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    # ==========================================================
+    # FORCE SUBSCRIBE IMAGE
+    # ==========================================================
+
+    async def set_fsub_image(self, bot_key, file_id):
+        await self.settings.update_one(
+            {"key": f"fsub_image_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"fsub_image_{bot_key}",
+                    "value": file_id
+                }
+            },
+            upsert=True
+        )
+
+    async def get_fsub_image(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"fsub_image_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    # ==========================================================
+    # FORCE SUBSCRIBE BUTTONS
+    # ==========================================================
+
+    async def set_fsub_buttons(self, bot_key, buttons):
+        await self.settings.update_one(
+            {"key": f"fsub_buttons_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"fsub_buttons_{bot_key}",
+                    "value": buttons
+                }
+            },
+            upsert=True
+        )
+
+    async def get_fsub_buttons(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"fsub_buttons_{bot_key}"}
+        )
+        return r["value"] if r else []
+
+
+
 # Global database instance
 db = Database()
                     
