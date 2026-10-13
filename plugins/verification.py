@@ -1,0 +1,232 @@
+# plugins/verification.py
+from pyrogram import Client, filters
+from pyrogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import MessageNotModified
+from database import db
+
+vv_states = {}
+
+
+async def safe_edit(message, text, markup=None):
+    try:
+        await message.edit_text(text, reply_markup=markup, disable_web_page_preview=True)
+    except MessageNotModified:
+        pass
+    except Exception as e:
+        print(f"Edit error: {e}")
+
+
+# ==========================================================
+# 🔹 MAIN TOKEN VERIFICATION MENU (Main Bot)
+# ==========================================================
+@Client.on_callback_query(filters.regex("^main_token_verify$"))
+async def main_token_verify_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    status = await db.get_verify_status(bot_username)
+    on_off = "ON ✅" if status else "OFF ❌"
+
+    text = "ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴛᴏᴋᴇɴ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ sᴇᴛᴛɪɴɢs ғʀᴏᴍ ʜᴇʀᴇ ɢɪᴠᴇɴ ʙᴇʟᴏᴡ ʙᴜᴛᴛᴏɴs"
+
+    buttons = [
+        [InlineKeyboardButton("Verify Shortner", callback_data="mv_sl"),
+         InlineKeyboardButton("Verify Tutorial", callback_data="mv_tt")],
+        [InlineKeyboardButton("Verify Time", callback_data="mv_time"),
+         InlineKeyboardButton("Second Verification", callback_data="mv_second")],
+        [InlineKeyboardButton("Third Verification", callback_data="mv_third")],
+        [InlineKeyboardButton(f"Verify On/Off: {on_off}", callback_data="mv_toggle")],
+        [InlineKeyboardButton("🔙 Back", callback_data="main_settings")]
+    ]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 VERIFY SHORTLINK
+# ==========================================================
+@Client.on_callback_query(filters.regex("^mv_sl$"))
+async def main_verify_sl(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    url = await db.get_verify_shortlink_url(bot_username)
+    api = await db.get_verify_shortlink_api(bot_username)
+
+    text = (
+        "ʜᴇʀᴇ ʏᴏᴜ ᴄᴀɴ ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ ᴠᴇʀɪғʏ sʜᴏʀᴛʟɪɴᴋ\n\n"
+        f"ᴜʀʟ - {url or 'Not set'}\nᴀᴘɪ - {api or 'Not set'}"
+    )
+
+    buttons = [
+        [InlineKeyboardButton("Set Shortlink", callback_data="mv_sl_set")],
+        [InlineKeyboardButton("Delete Shortlink", callback_data="mv_sl_del")],
+        [InlineKeyboardButton("🔙 Back", callback_data="main_token_verify")]
+    ]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^mv_sl_set$"))
+async def main_verify_sl_set(client: Client, callback_query: CallbackQuery):
+    vv_states[callback_query.from_user.id] = "waiting_verify_sl_url"
+    text = (
+        "sᴇɴᴅ ᴍᴇ ᴀ sʜᴏʀᴛʟɪɴᴋ ᴜʀʟ...\n\n"
+        "ғᴏʀᴍᴀᴛ :\n\nhttps://vjlink.online - ❌\n\nvjlink.online - ✅\n\n"
+        "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    )
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_sl")]]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^mv_sl_del$"))
+async def main_verify_sl_del(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    await db.delete_verify_shortlink(bot_username)
+    await callback_query.answer("✅ Deleted.", show_alert=True)
+    await main_verify_sl(client, callback_query)
+
+
+# ==========================================================
+# 🔹 VERIFY TUTORIAL
+# ==========================================================
+@Client.on_callback_query(filters.regex("^mv_tt$"))
+async def main_verify_tt(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    link = await db.get_verify_tutorial(bot_username)
+
+    text = (
+        "ʜᴇʀᴇ ʏᴏᴜ ᴄᴀɴ ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ ᴛᴏᴋᴇɴ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ʟɪɴᴋ "
+        "sʜᴏʀᴛɴᴇʀ ᴛᴜᴛᴏʀɪᴀʟ ᴠɪᴅᴇᴏ ʟɪɴᴋ ꜰᴏʀ ʜᴏᴡ ᴛᴏ ᴏᴘᴇɴ ʟɪɴᴋ.\n\n"
+        f"ʟɪɴᴋ - {link or 'Not set'}"
+    )
+    buttons = [
+        [InlineKeyboardButton("Set Tutorial", callback_data="mv_tt_set")],
+        [InlineKeyboardButton("Delete Tutorial", callback_data="mv_tt_del")],
+        [InlineKeyboardButton("🔙 Back", callback_data="main_token_verify")]
+    ]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^mv_tt_set$"))
+async def main_verify_tt_set(client: Client, callback_query: CallbackQuery):
+    vv_states[callback_query.from_user.id] = "waiting_verify_tt"
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴛᴜᴛᴏʀɪᴀʟ ʟɪɴᴋ...\n\n/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_tt")]]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^mv_tt_del$"))
+async def main_verify_tt_del(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    await db.delete_verify_tutorial(bot_username)
+    await callback_query.answer("✅ Deleted.", show_alert=True)
+    await main_verify_tt(client, callback_query)
+
+
+# ==========================================================
+# 🔹 VERIFY TIME
+# ==========================================================
+@Client.on_callback_query(filters.regex("^mv_time$"))
+async def main_verify_time(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    t = await db.get_verify_time(bot_username)
+
+    text = (
+        "ʜᴇʀᴇ ʏᴏᴜ ᴄᴀɴ ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ ᴛɪᴍᴇ sᴇᴛᴛɪɴɢ.\n\n"
+        f"ᴛɪᴍᴇ - {t}"
+    )
+    buttons = [
+        [InlineKeyboardButton("Set Time", callback_data="mv_time_set")],
+        [InlineKeyboardButton("🔙 Back", callback_data="main_token_verify")]
+    ]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^mv_time_set$"))
+async def main_verify_time_set(client: Client, callback_query: CallbackQuery):
+    vv_states[callback_query.from_user.id] = "waiting_verify_time"
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴛɪᴍᴇ ɪɴ ʟɪᴋᴇ ᴛʜɪs - 1h ᴏʀ 15m\n\n/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_time")]]
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+# ==========================================================
+# 🔹 INPUT HANDLER (Main Bot)
+# ==========================================================
+@Client.on_message(
+    filters.private & filters.text & ~filters.command(
+        ["cancel", "start", "help", "settings", "link", "batch", "plan", "myplan"]
+    ),
+    group=80
+)
+async def main_verify_input(client: Client, message: Message):
+    user_id = message.from_user.id
+    state = vv_states.get(user_id)
+    if not state:
+        return
+
+    bot_username = (await client.get_me()).username
+    text = message.text.strip()
+
+    if state == "waiting_verify_sl_url":
+        if not (text.startswith("http://") or text.startswith("https://")):
+            text = "https://" + text
+        text = text.rstrip("/")
+        vv_states[user_id] = {"state": "waiting_verify_sl_api", "url": text}
+        return await message.reply_text("sᴇɴᴅ ᴍᴇ ᴀᴘɪ ᴋᴇʏ...")
+
+    if isinstance(state, dict) and state.get("state") == "waiting_verify_sl_api":
+        await db.set_verify_shortlink_url(bot_username, state["url"])
+        await db.set_verify_shortlink_api(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_sl")]]
+        return await message.reply_text(
+            "sᴜᴄᴄᴇssꜰᴜʟʟʏ sᴇᴛ sʜᴏʀᴛʟɪɴᴋ ✅",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    if state == "waiting_verify_tt":
+        await db.set_verify_tutorial(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_tt")]]
+        return await message.reply_text(
+            "✅ Tutorial link saved.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    if state == "waiting_verify_time":
+        if not (text.endswith("m") or text.endswith("h")):
+            return await message.reply_text("❌ Invalid format. Use 15m or 1h.")
+        await db.set_verify_time(bot_username, text)
+        vv_states.pop(user_id, None)
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="mv_time")]]
+        return await message.reply_text(
+            f"✅ Time set to {text}",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+
+# ==========================================================
+# 🔹 TOGGLE ON/OFF
+# ==========================================================
+@Client.on_callback_query(filters.regex("^mv_toggle$"))
+async def main_verify_toggle(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    current = await db.get_verify_status(bot_username)
+
+    if not current:
+        url = await db.get_verify_shortlink_url(bot_username)
+        api = await db.get_verify_shortlink_api(bot_username)
+        if not url or not api:
+            return await callback_query.answer("⚠️ Set Verify Shortlink first.", show_alert=True)
+
+    await db.set_verify_status(bot_username, not current)
+    await callback_query.answer(
+        f"Verification {'ON ✅' if not current else 'OFF ❌'}", show_alert=True
+    )
+    await main_token_verify_menu(client, callback_query)
+
+
+@Client.on_callback_query(filters.regex("^mv_second$"))
+async def mv_second(client: Client, callback_query: CallbackQuery):
+    await callback_query.answer("Second verification — duplicate with prefix 'mv2_'.", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("^mv_third$"))
+async def mv_third(client: Client, callback_query: CallbackQuery):
+    await callback_query.answer("Third verification — same pattern.", show_alert=True)
+
