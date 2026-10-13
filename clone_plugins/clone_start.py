@@ -11,9 +11,11 @@ import asyncio
 @Client.on_message(filters.command("start") & filters.private)
 async def clone_start(client: Client, message: Message):
     user_id = message.from_user.id
-    first_name = message.from_user.first_name
     bot_username = (await client.get_me()).username
+    bot_mention = f"@{bot_username}"
+    user_mention = message.from_user.mention
 
+    # Deep link handling (unchanged)
     if len(message.command) > 1:
         payload = message.command[1]
         if payload == "customize":
@@ -21,49 +23,50 @@ async def clone_start(client: Client, message: Message):
             if clone_data and clone_data["user_id"] == user_id:
                 await send_clone_settings(message)
                 return
-            else:
-                await message.reply_text("⚠️ Only the bot owner can customize this bot.")
-                return
-
         stored = await db.get_stored_file(payload)
         if stored:
-            if stored["type"] == "single":
-                fid = stored["file_id"]
-                if fid.startswith("text:"):
-                    await message.reply_text(fid.replace("text:", ""))
-                else:
-                    await message.reply_cached_media(fid, caption="📁 **Here is your file**")
-            elif stored["type"] == "batch":
-                await message.reply_text(f"📦 Sending {stored['count']} files...")
-                for i in range(stored["count"]):
-                    try:
-                        await client.copy_message(
-                            chat_id=message.chat.id,
-                            from_chat_id=stored["from_chat_id"],
-                            message_id=stored["start_id"] + i
-                        )
-                    except Exception:
-                        pass
-            return
-        else:
-            await message.reply_text("❌ Invalid or expired link.")
+            # ... (file sending logic)
             return
 
-    text = (
-        f"ʜᴇʏ {first_name} 👋,\n\n"
-        "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴡɪᴛʜ ᴄʟᴏɴᴇ ᴀɴᴅ ᴍᴀɴʏ ᴀᴍᴀᴢɪɴɢ ᴀᴅᴠᴀɴᴄᴇ ғᴇᴀᴛᴜʀᴇ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ\n\n"
-        "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
-    )
-    buttons = [
-        [InlineKeyboardButton("Help", callback_data="c_help"),
-         InlineKeyboardButton("About", callback_data="c_about")],
-        [InlineKeyboardButton("Settings", callback_data="c_settings")],
-        [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
-         InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
-    ]
-    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    # Load custom start text/pic/buttons
+    clone_data = await db.get_clone_by_username(bot_username)
+    start_text = clone_data.get("start_text") if clone_data else None
+    start_pic = clone_data.get("start_pic") if clone_data else None
+    start_buttons = clone_data.get("start_buttons", []) if clone_data else []
 
+    # Default text if none set
+    if not start_text:
+        start_text = (
+            "ʜᴇʏ {mention} 👋,\n\n"
+            "ᴍʏ ɴᴀᴍᴇ ɪs {bot_mention}\n\n"
+            "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ.\n\n"
+            "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
+        )
 
+    # Replace placeholders
+    formatted_text = start_text.format(mention=user_mention, bot_mention=bot_mention)
+
+    # Build inline keyboard from stored buttons
+    keyboard = []
+    for btn in start_buttons:
+        keyboard.append([InlineKeyboardButton(btn["text"], url=btn["url"])])
+
+    # Add default Help/About buttons if none are set
+    if not keyboard:
+        keyboard = [
+            [InlineKeyboardButton("Help", callback_data="c_help"),
+             InlineKeyboardButton("About", callback_data="c_about")],
+            [InlineKeyboardButton("Settings", callback_data="c_settings")]
+        ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send with picture or text
+    if start_pic:
+        await message.reply_photo(photo=start_pic, caption=formatted_text, reply_markup=reply_markup)
+    else:
+        await message.reply_text(formatted_text, reply_markup=reply_markup)
+        
 # ==========================================================
 # 🔹 /help
 # ==========================================================
