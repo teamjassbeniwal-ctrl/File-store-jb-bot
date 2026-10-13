@@ -13,7 +13,43 @@ async def start_cmd(client: Client, message: Message):
     first_name = message.from_user.first_name
     await db.add_user(user_id)
 
+    bot_username = (await client.get_me()).username
     clone = await db.get_clone(user_id)
+
+    # ==========================================================
+    # 🔹 FORCE SUBSCRIBE CHECK — sirf /start pe (deep link ke alawa)
+    # ==========================================================
+    is_deep_link = message.text and " " in message.text
+    if not is_deep_link:
+        fsub_status = await db.get_fsub_status(bot_username)
+        if fsub_status:
+            from utils.fsub_helper import check_subscription, build_fsub_keyboard
+            not_joined = await check_subscription(client, user_id, bot_username)
+            if not_joined:
+                fsub_text = await db.get_fsub_text(bot_username)
+                fsub_img = await db.get_fsub_image(bot_username)
+                keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
+
+                default_text = (
+                    "📢 **Please Join Our Channels**\n\n"
+                    "To use this bot, you must join the channels below.\n"
+                    "After joining, click **✅ I Joined**."
+                )
+                msg_text = fsub_text or default_text
+
+                if fsub_img:
+                    await message.reply_photo(
+                        photo=fsub_img,
+                        caption=msg_text,
+                        reply_markup=keyboard
+                    )
+                else:
+                    await message.reply_text(
+                        msg_text,
+                        reply_markup=keyboard,
+                        disable_web_page_preview=True
+                    )
+                return
 
     # ==========================================================
     # 🔹 DEEP LINK HANDLER — file/batch link click hone par
@@ -78,20 +114,26 @@ async def start_cmd(client: Client, message: Message):
     ]
 
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
 # ==========================================================
 # 🔹 /help COMMAND
 # ==========================================================
 @Client.on_message(filters.command("help") & filters.private)
 async def help_cmd(client: Client, message: Message):
     await send_help_menu(message)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 @Client.on_callback_query(filters.regex("main_help"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
     await send_help_menu(callback_query.message, edit=True)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 async def send_help_menu(message, edit=False):
     help_text = (
@@ -144,12 +186,20 @@ async def send_help_menu(message, edit=False):
 @Client.on_message(filters.command("about") & filters.private)
 async def about_cmd(client: Client, message: Message):
     await send_about_menu(message)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 @Client.on_callback_query(filters.regex("main_about"))
 async def about_callback(client: Client, callback_query: CallbackQuery):
     await send_about_menu(callback_query.message, edit=True)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 async def send_about_menu(message, edit=False):
     about_text = (
@@ -175,6 +225,11 @@ async def send_about_menu(message, edit=False):
 # ==========================================================
 @Client.on_message(filters.command("id") & filters.private)
 async def id_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user = message.from_user
     premium_status = "True" if user.is_premium else "False"
     first_name = user.first_name if user.first_name else "None"
@@ -203,12 +258,20 @@ async def id_cmd(client: Client, message: Message):
 @Client.on_message(filters.command("settings") & filters.private)
 async def settings_cmd(client: Client, message: Message):
     await send_main_settings(message)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 @Client.on_callback_query(filters.regex("main_settings"))
 async def settings_callback(client: Client, callback_query: CallbackQuery):
     await send_main_settings(callback_query.message, edit=True)
-
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
 
 async def send_main_settings(message, edit=False):
     text = (
