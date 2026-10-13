@@ -1,4 +1,4 @@
-# plugins/file_store.py
+# clone_plugins/clone_files.py
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
@@ -6,24 +6,24 @@ from utils.shortener import shorten_url
 from utils.verify_helper import needs_verification, mark_verified
 from utils.fsub_helper import check_subscription, build_fsub_keyboard
 from utils.fsub_middleware import check_force_sub
+from utils.logger import log_media_event
 import base64
 import time
 
 user_states = {}
-MAIN_BOT_KEY = "MAIN_BOT"
 
 
 # ==========================================================
 # 🔹 /link
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
-async def link_cmd(client: Client, message: Message):
+async def clone_link(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
 
     user_states[message.from_user.id] = "waiting_for_link_file"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "sᴇɴᴅ ᴍᴇ ʏᴏᴜʀ ᴍᴇssᴀɢᴇ ᴡʜɪᴄʜ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴛᴏʀᴇ",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -34,13 +34,13 @@ async def link_cmd(client: Client, message: Message):
 # 🔹 /batch
 # ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
-async def batch_cmd(client: Client, message: Message):
+async def clone_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
 
     user_states[message.from_user.id] = "waiting_for_batch_file"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 "
         "(𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 "
@@ -55,13 +55,13 @@ async def batch_cmd(client: Client, message: Message):
 # 🔹 /custom_batch
 # ==========================================================
 @Client.on_message(filters.command("custom_batch") & filters.private)
-async def custom_batch_cmd(client: Client, message: Message):
+async def clone_custom_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
 
     user_states[message.from_user.id] = "waiting_for_custom_batch"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "📝 **CUSTOM BATCH**\n\nSend message links (one per line).",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -72,13 +72,13 @@ async def custom_batch_cmd(client: Client, message: Message):
 # 🔹 /multiple_batch
 # ==========================================================
 @Client.on_message(filters.command("multiple_batch") & filters.private)
-async def multiple_batch_cmd(client: Client, message: Message):
+async def clone_multiple_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
 
     user_states[message.from_user.id] = "waiting_for_multiple_batch"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "📦 **MULTIPLE BATCH**\n\nSend multiple channel messages (one per line).",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -89,13 +89,13 @@ async def multiple_batch_cmd(client: Client, message: Message):
 # 🔹 /special_link
 # ==========================================================
 @Client.on_message(filters.command("special_link") & filters.private)
-async def special_link_cmd(client: Client, message: Message):
+async def clone_special_link(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
 
     user_states[message.from_user.id] = "waiting_for_special_link"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "✨ **SPECIAL LINK**\n\nSend me the file to store with custom settings.",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -103,7 +103,7 @@ async def special_link_cmd(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE FOR /link (WITH LOG)
+# 🔹 HANDLE SINGLE FILE FOR /link
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -111,7 +111,7 @@ async def special_link_cmd(client: Client, message: Message):
      filters.voice | filters.video_note | filters.animation | filters.text),
     group=1
 )
-async def handle_link_file(client: Client, message: Message):
+async def handle_clone_link(client: Client, message: Message):
     user_id = message.from_user.id
     if user_states.get(user_id) != "waiting_for_link_file":
         return
@@ -175,7 +175,7 @@ async def handle_link_file(client: Client, message: Message):
         file_id = f"text:{message.text}"
 
     if not file_id:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await message.reply_text("❌ Unsupported file type.", reply_markup=InlineKeyboardMarkup(buttons))
 
     raw_id = f"{user_id}_{message.id}_{int(time.time())}"
@@ -184,9 +184,9 @@ async def handle_link_file(client: Client, message: Message):
     await db.save_stored_file(unique_id, file_id, message.id, message.chat.id, user_id, "single")
 
     direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
-    sl_status = await db.get_shortlink_status(MAIN_BOT_KEY)
-    sl_url = await db.get_shortlink_url(MAIN_BOT_KEY)
-    sl_api = await db.get_shortlink_api(MAIN_BOT_KEY)
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
 
     final_link = direct_link
     if sl_status and sl_url and sl_api:
@@ -196,7 +196,7 @@ async def handle_link_file(client: Client, message: Message):
 
     buttons = [
         [InlineKeyboardButton("🔗 Open Link", url=final_link)],
-        [InlineKeyboardButton("🔙 Back", callback_data="main_back")]
+        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
     ]
     await message.reply_text(
         f"✅ **File Stored Successfully!**\n\n🔗 **Link:**\n`{final_link}`",
@@ -205,59 +205,34 @@ async def handle_link_file(client: Client, message: Message):
     )
 
     # ==========================================================
-    # 🔹 LOG CHANNEL — media auto forward
+    # 🔹 CENTRAL MASTER LOGGING + Clone Owner Logging
     # ==========================================================
-    log_channel = await db.get_log_channel(MAIN_BOT_KEY)
+    clone_data = await db.get_clone_by_username(bot_username)
+    clone_owner_id = clone_data["user_id"] if clone_data else None
 
-    if log_channel:
-        try:
-            user = message.from_user
-            file_name = "Unknown"
-            file_size = "Unknown"
-
-            if message.document:
-                file_name = message.document.file_name or "Document"
-                file_size = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
-            elif message.video:
-                file_name = message.video.file_name or "Video"
-                file_size = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
-            elif message.audio:
-                file_name = message.audio.file_name or "Audio"
-                file_size = f"{round(message.audio.file_size / 1024 / 1024, 2)} MB"
-            elif message.photo:
-                file_name = "Photo"
-            elif message.text:
-                file_name = "Text Message"
-
-            log_text = (
-                f"📥 **New File Stored**\n\n"
-                f"👤 **User:** {user.mention}\n"
-                f"🆔 **ID:** `{user.id}`\n"
-                f"📛 **Username:** @{user.username or 'None'}\n\n"
-                f"📁 **File:** `{file_name}`\n"
-                f"📦 **Size:** {file_size}\n\n"
-                f"🔗 **Link:** {final_link}"
+    await log_media_event(
+        client=client,
+        event_type="media_upload",
+        message=message,
+        bot_username=bot_username,
+        user_id=user_id,
+        username=message.from_user.username,
+        clone_owner_id=clone_owner_id,
+        extra=f"🔗 Link: {final_link}"
             )
-
-            try:
-                await message.copy(log_channel, caption=log_text)
-            except Exception:
-                await client.send_message(log_channel, log_text, disable_web_page_preview=True)
-        except Exception as e:
-            print(f"Log channel error: {e}")
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
 # ==========================================================
 @Client.on_message(filters.private, group=2)
-async def handle_batch_file(client: Client, message: Message):
+async def handle_clone_batch(client: Client, message: Message):
     user_id = message.from_user.id
     if user_states.get(user_id) != "waiting_for_batch_file":
         return
     if message.text and message.text.startswith("/"):
         return
     if not message.forward_from_chat and not message.forward_from:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await message.reply_text(
             "⚠️ Please forward a message from your batch channel.",
             reply_markup=InlineKeyboardMarkup(buttons)
@@ -278,7 +253,7 @@ async def handle_batch_file(client: Client, message: Message):
         "start_id": start_id
     }
 
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
         "📦 **How many files?** Send a number.",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -286,10 +261,10 @@ async def handle_batch_file(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE BATCH COUNT (WITH LOG)
+# 🔹 HANDLE BATCH COUNT
 # ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=3)
-async def handle_batch_count(client: Client, message: Message):
+async def handle_clone_batch_count(client: Client, message: Message):
     user_id = message.from_user.id
     state = user_states.get(user_id)
     if not isinstance(state, dict) or state.get("state") != "waiting_for_batch_count":
@@ -300,7 +275,7 @@ async def handle_batch_count(client: Client, message: Message):
         if count < 1 or count > 500:
             raise ValueError
     except ValueError:
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await message.reply_text("⚠️ Invalid number (1-500).", reply_markup=InlineKeyboardMarkup(buttons))
 
     bot_username = (await client.get_me()).username
@@ -349,9 +324,9 @@ async def handle_batch_count(client: Client, message: Message):
     await db.save_batch(unique_id, from_chat_id, start_id, count, user_id)
 
     direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
-    sl_status = await db.get_shortlink_status(MAIN_BOT_KEY)
-    sl_url = await db.get_shortlink_url(MAIN_BOT_KEY)
-    sl_api = await db.get_shortlink_api(MAIN_BOT_KEY)
+    sl_status = await db.get_shortlink_status(bot_username)
+    sl_url = await db.get_shortlink_url(bot_username)
+    sl_api = await db.get_shortlink_api(bot_username)
 
     final_link = direct_link
     if sl_status and sl_url and sl_api:
@@ -361,7 +336,7 @@ async def handle_batch_count(client: Client, message: Message):
 
     buttons = [
         [InlineKeyboardButton("🔗 Open Batch", url=final_link)],
-        [InlineKeyboardButton("🔙 Back", callback_data="main_back")]
+        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
     ]
     await message.reply_text(
         f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
@@ -370,24 +345,21 @@ async def handle_batch_count(client: Client, message: Message):
     )
 
     # ==========================================================
-    # 🔹 LOG CHANNEL — batch log
+    # 🔹 CENTRAL MASTER LOGGING + Clone Owner Logging (Batch)
     # ==========================================================
-    log_channel = await db.get_log_channel(MAIN_BOT_KEY)
+    clone_data = await db.get_clone_by_username(bot_username)
+    clone_owner_id = clone_data["user_id"] if clone_data else None
 
-    if log_channel:
-        try:
-            user = message.from_user
-            log_text = (
-                f"📦 **New Batch Stored**\n\n"
-                f"👤 **User:** {user.mention}\n"
-                f"🆔 **ID:** `{user.id}`\n"
-                f"📛 **Username:** @{user.username or 'None'}\n\n"
-                f"📁 **Files Count:** `{count}`\n\n"
-                f"🔗 **Link:** {final_link}"
-            )
-            await client.send_message(log_channel, log_text, disable_web_page_preview=True)
-        except Exception as e:
-            print(f"Log channel error: {e}")
+    await log_media_event(
+        client=client,
+        event_type="batch_upload",
+        message=message,
+        bot_username=bot_username,
+        user_id=user_id,
+        username=message.from_user.username,
+        clone_owner_id=clone_owner_id,
+        extra=f"📁 Batch Count: {count}\n🔗 Link: {final_link}"
+    )
 
 
 # ==========================================================
@@ -407,9 +379,9 @@ async def handle_verify_callback(client: Client, message: Message):
 # 🔹 CANCEL
 # ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
-async def cancel_cmd(client: Client, message: Message):
+async def clone_cancel(client: Client, message: Message):
     user_id = message.from_user.id
     if user_id in user_states:
         user_states.pop(user_id, None)
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
