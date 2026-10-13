@@ -1,20 +1,20 @@
 # clone_plugins/clone_monetization.py
 from pyrogram import Client, filters
-from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 
 
 # ==========================================================
-# 🔹 MONETIZATION MENU (Triggered from Settings)
+# 🔹 MONETIZATION MENU
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_monetization$"))
 async def monetization_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
+
     if not clone_data or clone_data["user_id"] != callback_query.from_user.id:
         return await callback_query.answer("Owner only!", show_alert=True)
 
-    # Check current monetization status from DB
     monetization_on = clone_data.get("monetization", False)
     status_text = "ᴏɴ ✅" if monetization_on else "ᴏғғ ❌"
 
@@ -36,13 +36,18 @@ async def monetization_menu(client: Client, callback_query: CallbackQuery):
 
     toggle_text = "Disable Monetization" if monetization_on else "Enable Monetization"
 
+    # ✅ 2 buttons per row + Back on its own row
     buttons = [
-        [InlineKeyboardButton("Balance & Withdrawal Info", callback_data="c_monetization_stats")],
-        [InlineKeyboardButton(toggle_text, callback_data="c_monetization_toggle")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="c_monetization_cancel")]
+        [InlineKeyboardButton("Balance & Withdrawal Info", callback_data="c_monetization_stats"),
+         InlineKeyboardButton(toggle_text, callback_data="c_monetization_toggle")],
+        [InlineKeyboardButton("🔙 Back", callback_data="c_settings")]
     ]
 
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
+    await callback_query.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
+    )
 
 
 # ==========================================================
@@ -52,8 +57,8 @@ async def monetization_menu(client: Client, callback_query: CallbackQuery):
 async def monetization_stats(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
-
     bot_id = (await client.get_me()).id
+
     total_requests = clone_data.get("total_requests", 0) if clone_data else 0
     balance = clone_data.get("balance", 0.00) if clone_data else 0.00
 
@@ -94,11 +99,3 @@ async def monetization_toggle(client: Client, callback_query: CallbackQuery):
     status = "Enabled ✅" if new_state else "Disabled ❌"
     await callback_query.answer(f"Monetization {status}", show_alert=True)
     await monetization_menu(client, callback_query)
-
-
-# ==========================================================
-# 🔹 CANCEL
-# ==========================================================
-@Client.on_callback_query(filters.regex("^c_monetization_cancel$"))
-async def monetization_cancel(client: Client, callback_query: CallbackQuery):
-    await callback_query.message.delete()
