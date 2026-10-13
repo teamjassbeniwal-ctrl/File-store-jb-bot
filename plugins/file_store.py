@@ -17,6 +17,11 @@ MAIN_BOT_KEY = "MAIN_BOT"
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def link_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_states[message.from_user.id] = "waiting_for_link_file"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -30,6 +35,11 @@ async def link_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def batch_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_states[message.from_user.id] = "waiting_for_batch_file"
     bot_username = (await client.get_me()).username
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
@@ -48,6 +58,11 @@ async def batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("custom_batch") & filters.private)
 async def custom_batch_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_states[message.from_user.id] = "waiting_for_custom_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -61,6 +76,11 @@ async def custom_batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("multiple_batch") & filters.private)
 async def multiple_batch_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_states[message.from_user.id] = "waiting_for_multiple_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -74,6 +94,11 @@ async def multiple_batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("special_link") & filters.private)
 async def special_link_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_states[message.from_user.id] = "waiting_for_special_link"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -209,6 +234,11 @@ async def handle_link_file(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.private, group=2)
 async def handle_batch_file(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_id = message.from_user.id
     if user_states.get(user_id) != "waiting_for_batch_file":
         return
@@ -363,6 +393,11 @@ async def handle_verify_callback(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
 async def cancel_cmd(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    bot_username = (await client.get_me()).username
+    if not await check_force_sub(client, message, bot_username):
+        return
+    # ... original code
     user_id = message.from_user.id
     if user_id in user_states:
         user_states.pop(user_id, None)
