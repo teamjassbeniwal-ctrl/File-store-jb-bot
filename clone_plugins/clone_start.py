@@ -15,58 +15,84 @@ async def clone_start(client: Client, message: Message):
     bot_mention = f"@{bot_username}"
     user_mention = message.from_user.mention
 
-    # Deep link handling (unchanged)
+    # Deep link handling
     if len(message.command) > 1:
         payload = message.command[1]
+
         if payload == "customize":
             clone_data = await db.get_clone_by_username(bot_username)
             if clone_data and clone_data["user_id"] == user_id:
                 await send_clone_settings(message)
                 return
+            else:
+                await message.reply_text("⚠️ Only the bot owner can customize this bot.")
+                return
+
         stored = await db.get_stored_file(payload)
         if stored:
-            # ... (file sending logic)
+            if stored["type"] == "single":
+                fid = stored["file_id"]
+                if fid.startswith("text:"):
+                    await message.reply_text(fid.replace("text:", ""))
+                else:
+                    await message.reply_cached_media(fid, caption="📁 **Here is your file**")
+            elif stored["type"] == "batch":
+                await message.reply_text(f"📦 Sending {stored['count']} files...")
+                for i in range(stored["count"]):
+                    try:
+                        await client.copy_message(
+                            chat_id=message.chat.id,
+                            from_chat_id=stored["from_chat_id"],
+                            message_id=stored["start_id"] + i
+                        )
+                    except Exception:
+                        pass
+            return
+        else:
+            await message.reply_text("❌ Invalid or expired link.")
             return
 
-    # Load custom start text/pic/buttons
+    # Load custom start text/pic/buttons from DB
     clone_data = await db.get_clone_by_username(bot_username)
     start_text = clone_data.get("start_text") if clone_data else None
     start_pic = clone_data.get("start_pic") if clone_data else None
     start_buttons = clone_data.get("start_buttons", []) if clone_data else []
 
-    # Default text if none set
     if not start_text:
         start_text = (
             "ʜᴇʏ {mention} 👋,\n\n"
             "ᴍʏ ɴᴀᴍᴇ ɪs {bot_mention}\n\n"
-            "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ.\n\n"
+            "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ.\n\n"
             "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
         )
 
-    # Replace placeholders
-    formatted_text = start_text.format(mention=user_mention, bot_mention=bot_mention)
+    try:
+        formatted_text = start_text.format(mention=user_mention, bot_mention=bot_mention)
+    except Exception:
+        formatted_text = start_text
 
-    # Build inline keyboard from stored buttons
+    # Build keyboard
     keyboard = []
     for btn in start_buttons:
         keyboard.append([InlineKeyboardButton(btn["text"], url=btn["url"])])
 
-    # Add default Help/About buttons if none are set
     if not keyboard:
         keyboard = [
             [InlineKeyboardButton("Help", callback_data="c_help"),
              InlineKeyboardButton("About", callback_data="c_about")],
-            [InlineKeyboardButton("Settings", callback_data="c_settings")]
+            [InlineKeyboardButton("Settings", callback_data="c_settings")],
+            [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
+             InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
         ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Send with picture or text
     if start_pic:
         await message.reply_photo(photo=start_pic, caption=formatted_text, reply_markup=reply_markup)
     else:
         await message.reply_text(formatted_text, reply_markup=reply_markup)
-        
+
+
 # ==========================================================
 # 🔹 /help
 # ==========================================================
@@ -219,14 +245,14 @@ async def send_clone_settings(message, edit=False):
 
 
 # ==========================================================
-# 🔹 SETTINGS BUTTON HANDLERS
+# 🔹 GENERIC SETTINGS BUTTON HANDLER
+# ⚠️ NOTE: monetization and start_msg are REMOVED from this regex
+# They are handled in clone_monetization.py and clone_startmsg.py
 # ==========================================================
-@Client.on_callback_query(filters.regex("^c_(monetization|start_msg|log_channel|db_channel|admins|status|bot_mode|restart|delete_bot|more_features)$"))
+@Client.on_callback_query(filters.regex("^c_(log_channel|db_channel|admins|status|bot_mode|restart|delete_bot|more_features)$"))
 async def settings_button_handler(client: Client, callback_query: CallbackQuery):
     key = callback_query.data.replace("c_", "")
     messages = {
-        "monetization": "💰 MONETIZATION\n\nConfigure shortlink API and earnings.",
-        "start_msg": "📝 START MESSAGE\n\nSend me the message to display on /start.",
         "log_channel": "📢 LOG CHANNEL\n\nForward a message from your log channel.",
         "db_channel": "☁️ DATABASE CHANNEL\n\nForward a message from your DB channel.",
         "admins": "👥 ADMINS\n\nSend me user IDs (one per line) to promote.",
@@ -245,19 +271,41 @@ async def settings_button_handler(client: Client, callback_query: CallbackQuery)
 @Client.on_callback_query(filters.regex("^c_back$"))
 async def clone_back_cb(client: Client, callback_query: CallbackQuery):
     first_name = callback_query.from_user.first_name
-    text = (
-        f"ʜᴇʏ {first_name} 👋,\n\n"
-        "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴡɪᴛʜ ᴄʟᴏɴᴇ ᴀɴᴅ ᴍᴀɴʏ ᴀᴍᴀᴢɪɴɢ ᴀᴅᴠᴀɴᴄᴇ ғᴇᴀᴛᴜʀᴇ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ\n\n"
-        "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
-    )
-    buttons = [
-        [InlineKeyboardButton("Help", callback_data="c_help"),
-         InlineKeyboardButton("About", callback_data="c_about")],
-        [InlineKeyboardButton("Settings", callback_data="c_settings")],
-        [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
-         InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
-    ]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    bot_username = (await client.get_me()).username
+    bot_mention = f"@{bot_username}"
+    user_mention = callback_query.from_user.mention
+
+    clone_data = await db.get_clone_by_username(bot_username)
+    start_text = clone_data.get("start_text") if clone_data else None
+    start_buttons = clone_data.get("start_buttons", []) if clone_data else []
+
+    if not start_text:
+        start_text = (
+            "ʜᴇʏ {mention} 👋,\n\n"
+            "ᴍʏ ɴᴀᴍᴇ ɪs {bot_mention}\n\n"
+            "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ.\n\n"
+            "ᴛᴏ ᴋɴᴏᴡ ᴍᴏʀᴇ ᴄʟɪᴄᴋ ʜᴇʟᴘ ʙᴜᴛᴛᴏɴ."
+        )
+
+    try:
+        formatted = start_text.format(mention=user_mention, bot_mention=bot_mention)
+    except Exception:
+        formatted = start_text
+
+    keyboard = []
+    for btn in start_buttons:
+        keyboard.append([InlineKeyboardButton(btn["text"], url=btn["url"])])
+
+    if not keyboard:
+        keyboard = [
+            [InlineKeyboardButton("Help", callback_data="c_help"),
+             InlineKeyboardButton("About", callback_data="c_about")],
+            [InlineKeyboardButton("Settings", callback_data="c_settings")],
+            [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
+             InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
+        ]
+
+    await callback_query.message.edit_text(formatted, reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 # ==========================================================
@@ -289,7 +337,7 @@ async def clone_broadcast(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /ban and /unban (CORRECTED)
+# 🔹 /ban and /unban
 # ==========================================================
 @Client.on_message(filters.command("ban") & filters.private)
 async def clone_ban(client: Client, message: Message):
