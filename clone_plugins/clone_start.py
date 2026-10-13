@@ -20,7 +20,9 @@ async def clone_start(client: Client, message: Message):
     bot_mention = f"@{bot_username}"
     user_mention = message.from_user.mention
 
-    # Log new user
+    # ==========================================================
+    # 🔹 LOG CHANNEL NOTIFICATION
+    # ==========================================================
     clone_data = await db.get_clone_by_username(bot_username)
     if clone_data and clone_data.get("log_channel"):
         try:
@@ -34,41 +36,57 @@ async def clone_start(client: Client, message: Message):
         except Exception as e:
             print(f"Log channel error: {e}")
 
-    # Deep link
-    if len(message.command) > 1:
-        payload = message.command[1]
+    # ==========================================================
+    # 🔹 DEEP LINK HANDLER
+    # ==========================================================
+    if message.text and " " in message.text:
+        parts = message.text.split(maxsplit=1)
+        if len(parts) > 1:
+            payload = parts[1].strip()
 
-        if payload == "customize":
-            if clone_data and clone_data["user_id"] == user_id:
-                await send_clone_settings(message)
-                return
-            else:
-                return await message.reply_text("⚠️ Only the bot owner can customize this bot.")
-
-        stored = await db.get_stored_file(payload)
-        if stored:
-            if stored["type"] == "single":
-                fid = stored["file_id"]
-                if fid.startswith("text:"):
-                    await message.reply_text(fid.replace("text:", ""))
+            # --- Customize menu ---
+            if payload == "customize":
+                if clone_data and clone_data["user_id"] == user_id:
+                    await send_clone_settings(message)
+                    return
                 else:
-                    await message.reply_cached_media(fid, caption="📁 **Here is your file**")
-            elif stored["type"] == "batch":
-                await message.reply_text(f"📦 Sending {stored['count']} files...")
-                for i in range(stored["count"]):
+                    return await message.reply_text("⚠️ Only the bot owner can customize this bot.")
+
+            # --- Batch check ---
+            batch_data = await db.get_batch(payload)
+            if batch_data:
+                await message.reply_text(f"📦 Sending {batch_data['count']} files...")
+                for i in range(batch_data["count"]):
                     try:
                         await client.copy_message(
                             chat_id=message.chat.id,
-                            from_chat_id=stored["from_chat_id"],
-                            message_id=stored["start_id"] + i
+                            from_chat_id=batch_data["from_chat_id"],
+                            message_id=batch_data["start_id"] + i
                         )
-                    except Exception:
-                        pass
-            return
-        else:
-            return await message.reply_text("❌ Invalid or expired link.")
+                    except Exception as e:
+                        print(f"Batch error: {e}")
+                return
 
-    # Custom start message
+            # --- Single file check ---
+            stored = await db.get_stored_file(payload)
+            if stored:
+                if stored["type"] == "single":
+                    fid = stored["file_id"]
+                    if fid.startswith("text:"):
+                        await message.reply_text(fid.replace("text:", ""))
+                    else:
+                        await message.reply_cached_media(fid, caption="📁 **Here is your file**")
+                return
+
+            # --- Not found ---
+            return await message.reply_text(
+                "❌ **Invalid or Expired Link**\n\n"
+                "This link doesn't point to any stored file."
+            )
+
+    # ==========================================================
+    # 🔹 NORMAL /start — custom start message
+    # ==========================================================
     start_text = clone_data.get("start_text") if clone_data else None
     start_pic = clone_data.get("start_pic") if clone_data else None
     start_buttons = clone_data.get("start_buttons", []) if clone_data else []
@@ -92,8 +110,6 @@ async def clone_start(client: Client, message: Message):
 
     if not keyboard:
         keyboard = [
-            [InlineKeyboardButton("💎 My Plan", callback_data="c_myplan"),
-             InlineKeyboardButton("📖 Plans", callback_data="c_plan")],
             [InlineKeyboardButton("Help", callback_data="c_help"),
              InlineKeyboardButton("About", callback_data="c_about")],
             [InlineKeyboardButton("Settings", callback_data="c_settings"),
