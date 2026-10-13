@@ -807,3 +807,44 @@ async def clone_unban(client: Client, message: Message):
     await db.unban_user(target)
     await message.reply_text(f"✅ User {target} unbanned.")
 
+# ==========================================================
+# 🔹 VIEW PLANS CALLBACK
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_plan$"))
+async def c_plan_callback(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    plan_text = await db.get_premium_plan_text(bot_username)
+
+    if not plan_text:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+        return await callback_query.message.edit_text(
+            "❌ **Plan Not Available**\n\n"
+            "ᴛʜᴇ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴ ʜᴀs ɴᴏᴛ ʙᴇᴇɴ sᴇᴛ ʏᴇᴛ.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await callback_query.message.edit_text(
+        f"💎 **PREMIUM PLAN**\n\n{plan_text}",
+        reply_markup=InlineKeyboardMarkup(buttons),
+        disable_web_page_preview=True
+    )
+
+
+# ==========================================================
+# 🔹 MY PLAN CALLBACK
+# ==========================================================
+@Client.on_callback_query(filters.regex("^c_myplan$"))
+async def c_myplan_callback(client: Client, callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    bot_username = (await client.get_me()).username
+    is_premium = await db.is_premium_user(user_id, bot_username)
+
+    if is_premium:
+        text = "💎 **My Premium Status**\n\n✅ **Status:** Premium (Active)\n🎁 Unlimited access."
+    else:
+        text = "💎 **My Premium Status**\n\n📌 **Status:** Free\n🆓 Limit: 5 files/day\n\nType /plan to see plans."
+
+    buttons = [[InlineKeyboardButton("💎 View Plans", callback_data="c_plan")],
+               [InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
