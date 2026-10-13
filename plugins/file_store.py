@@ -5,6 +5,7 @@ from database import db
 from utils.shortener import shorten_url
 from utils.verify_helper import needs_verification, mark_verified
 from utils.fsub_helper import check_subscription, build_fsub_keyboard
+from utils.fsub_middleware import check_force_sub
 import base64
 import time
 
@@ -17,11 +18,10 @@ MAIN_BOT_KEY = "MAIN_BOT"
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def link_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user_states[message.from_user.id] = "waiting_for_link_file"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -35,13 +35,11 @@ async def link_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def batch_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user_states[message.from_user.id] = "waiting_for_batch_file"
-    bot_username = (await client.get_me()).username
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
         "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 "
@@ -58,11 +56,10 @@ async def batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("custom_batch") & filters.private)
 async def custom_batch_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user_states[message.from_user.id] = "waiting_for_custom_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -76,11 +73,10 @@ async def custom_batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("multiple_batch") & filters.private)
 async def multiple_batch_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user_states[message.from_user.id] = "waiting_for_multiple_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
@@ -94,17 +90,17 @@ async def multiple_batch_cmd(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("special_link") & filters.private)
 async def special_link_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user_states[message.from_user.id] = "waiting_for_special_link"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
         "✨ **SPECIAL LINK**\n\nSend me the file to store with custom settings.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
+
 
 # ==========================================================
 # 🔹 HANDLE SINGLE FILE FOR /link
@@ -125,9 +121,7 @@ async def handle_link_file(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # ==========================================================
-    # 🔹 FORCE SUBSCRIBE GATE
-    # ==========================================================
+    # Force Sub gate
     fsub_status = await db.get_fsub_status(bot_username)
     if fsub_status:
         not_joined = await check_subscription(client, user_id, bot_username)
@@ -149,9 +143,7 @@ async def handle_link_file(client: Client, message: Message):
                 await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
             return
 
-    # ==========================================================
-    # 🔹 VERIFICATION GATE
-    # ==========================================================
+    # Verification gate
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
@@ -171,15 +163,13 @@ async def handle_link_file(client: Client, message: Message):
             f"ʜᴇʏ {message.from_user.first_name}\n\n"
             "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
             "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
-            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ 😊.\n\n"
+            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ 😊.\n\n"
             "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
 
-    # ==========================================================
-    # 🔹 FILE PROCESSING
-    # ==========================================================
+    # File processing
     file_id = None
     if message.document:
         file_id = message.document.file_id
@@ -234,11 +224,6 @@ async def handle_link_file(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.private, group=2)
 async def handle_batch_file(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
     user_id = message.from_user.id
     if user_states.get(user_id) != "waiting_for_batch_file":
         return
@@ -270,7 +255,8 @@ async def handle_batch_file(client: Client, message: Message):
     await message.reply_text(
         "📦 **How many files?** Send a number.",
         reply_markup=InlineKeyboardMarkup(buttons)
-        )
+    )
+
 
 # ==========================================================
 # 🔹 HANDLE BATCH COUNT
@@ -292,9 +278,7 @@ async def handle_batch_count(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # ==========================================================
-    # 🔹 FORCE SUBSCRIBE GATE
-    # ==========================================================
+    # Force Sub gate
     fsub_status = await db.get_fsub_status(bot_username)
     if fsub_status:
         not_joined = await check_subscription(client, user_id, bot_username)
@@ -316,9 +300,7 @@ async def handle_batch_count(client: Client, message: Message):
                 await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
             return
 
-    # ==========================================================
-    # 🔹 VERIFICATION GATE
-    # ==========================================================
+    # Verification gate
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
@@ -341,9 +323,7 @@ async def handle_batch_count(client: Client, message: Message):
             disable_web_page_preview=True
         )
 
-    # ==========================================================
-    # 🔹 BATCH PROCESSING
-    # ==========================================================
+    # Batch processing
     from_chat_id = state["from_chat_id"]
     start_id = state["start_id"]
     user_states.pop(user_id, None)
@@ -393,11 +373,6 @@ async def handle_verify_callback(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
 async def cancel_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
     user_id = message.from_user.id
     if user_id in user_states:
         user_states.pop(user_id, None)
