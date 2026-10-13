@@ -3,6 +3,8 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 from config import OWNER_ID
+from utils.fsub_middleware import check_force_sub
+
 
 # ==========================================================
 # 🔹 /start COMMAND
@@ -16,9 +18,7 @@ async def start_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     clone = await db.get_clone(user_id)
 
-    # ==========================================================
-    # 🔹 FORCE SUBSCRIBE CHECK — sirf /start pe (deep link ke alawa)
-    # ==========================================================
+    # Force Subscribe check — sirf /start pe (deep link ke alawa)
     is_deep_link = message.text and " " in message.text
     if not is_deep_link:
         fsub_status = await db.get_fsub_status(bot_username)
@@ -51,16 +51,13 @@ async def start_cmd(client: Client, message: Message):
                     )
                 return
 
-    # ==========================================================
-    # 🔹 DEEP LINK HANDLER — file/batch link click hone par
-    # ==========================================================
+    # Deep link handler
     if message.text and " " in message.text:
         parts = message.text.split(maxsplit=1)
         if len(parts) > 1:
             payload = parts[1].strip()
 
             if payload != "customize":
-                # --- Batch check ---
                 batch_data = await db.get_batch(payload)
                 if batch_data:
                     await message.reply_text(f"📦 Sending {batch_data['count']} files...")
@@ -75,7 +72,6 @@ async def start_cmd(client: Client, message: Message):
                             print(f"Batch error: {e}")
                     return
 
-                # --- Single file check ---
                 file_data = await db.get_stored_file(payload)
                 if file_data:
                     fid = file_data["file_id"]
@@ -90,9 +86,7 @@ async def start_cmd(client: Client, message: Message):
                     "This link doesn't point to any stored file."
                 )
 
-    # ==========================================================
-    # 🔹 NORMAL /start — welcome message
-    # ==========================================================
+    # Normal welcome message
     text = (
         f"ʜᴇʏ {first_name} 👋,\n\n"
         "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴡɪᴛʜ ᴄʟᴏɴᴇ ᴀɴᴅ ᴍᴀɴʏ ᴀᴍᴀᴢɪɴɢ ᴀᴅᴠᴀɴᴄᴇ ғᴇᴀᴛᴜʀᴇ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ\n\n"
@@ -100,46 +94,38 @@ async def start_cmd(client: Client, message: Message):
     )
 
     buttons = [
-        [
-            InlineKeyboardButton("Help", callback_data="main_help"),
-            InlineKeyboardButton("About", callback_data="main_about")
-        ],
-        [
-            InlineKeyboardButton("Create Own Clone", callback_data="create_clone")
-        ],
-        [
-            InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
-            InlineKeyboardButton("Support", url="https://t.me/YourSupport")
-        ]
+        [InlineKeyboardButton("Help", callback_data="main_help"),
+         InlineKeyboardButton("About", callback_data="main_about")],
+        [InlineKeyboardButton("Create Own Clone", callback_data="create_clone")],
+        [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
+         InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
     ]
 
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
 # ==========================================================
 # 🔹 /help COMMAND
 # ==========================================================
 @Client.on_message(filters.command("help") & filters.private)
 async def help_cmd(client: Client, message: Message):
-    await send_help_menu(message)
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+    await send_help_menu(message)
+
 
 @Client.on_callback_query(filters.regex("main_help"))
 async def help_callback(client: Client, callback_query: CallbackQuery):
+    # Callback handlers mein force sub check nahi lagana
     await send_help_menu(callback_query.message, edit=True)
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
+
 
 async def send_help_menu(message, edit=False):
     help_text = (
         "🎓 **HELP MENU:**\n\n"
         "🤖 ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ\n"
-        "📨 ᴍʏ ɴᴀᴍᴇ ɪꜱ ꜰɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ, ʙᴜᴛ ɪ ᴄᴀɴ ꜱᴛᴏʀᴇ ᴀɴʏ ᴛʏᴘᴇ ᴏꜰ ᴄᴏɴᴛᴇɴᴛ, ɪɴᴄʟᴜᴅɪɴɢ ᴍᴇꜱꜱᴀɢᴇꜱ, ᴘʜᴏᴛᴏꜱ, ᴠɪᴅᴇᴏꜱ, ᴀɴᴅ ꜰɪʟᴇꜱ.\n"
+        "📨 ᴍʏ ɴᴀᴍᴇ ɪꜱ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ, ʙᴜᴛ ɪ ᴄᴀɴ ꜱᴛᴏʀᴇ ᴀɴʏ ᴛʏᴘᴇ ᴏꜰ ᴄᴏɴᴛᴇɴᴛ, ɪɴᴄʟᴜᴅɪɴɢ ᴍᴇꜱꜱᴀɢᴇꜱ, ᴘʜᴏᴛᴏꜱ, ᴠɪᴅᴇᴏꜱ, ᴀɴᴅ ꜰɪʟᴇꜱ.\n"
         "📂 ʏᴏᴜ ᴄᴀɴ ꜱᴛᴏʀᴇ ꜰɪʟᴇꜱ ꜰʀᴏᴍ ʏᴏᴜʀ ᴘᴜʙʟɪᴄ ᴄʜᴀɴɴᴇʟ ᴡɪᴛʜᴏᴜᴛ ᴀᴅᴅɪɴɢ ᴍᴇ ᴀꜱ ᴀɴ ᴀᴅᴍɪɴ.\n"
         "🔐 ɪꜰ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴏʀ ɢʀᴏᴜᴘ ɪꜱ ᴘʀɪᴠᴀᴛᴇ, ᴍᴀᴋᴇ ᴍᴇ ᴀɴ ᴀᴅᴍɪɴ ꜰɪʀꜱᴛ.\n"
         "🔗 ᴀꜰᴛᴇʀ ꜱᴛᴏʀɪɴɢ, ɪ ᴡɪʟʟ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ꜱʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ꜰᴏʀ ɪɴꜱᴛᴀɴᴛ ᴀᴄᴄᴇꜱꜱ ᴛᴏ ʏᴏᴜʀ ꜱᴛᴏʀᴇᴅ ᴄᴏɴᴛᴇɴᴛ.\n\n"
@@ -185,21 +171,16 @@ async def send_help_menu(message, edit=False):
 # ==========================================================
 @Client.on_message(filters.command("about") & filters.private)
 async def about_cmd(client: Client, message: Message):
-    await send_about_menu(message)
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+    await send_about_menu(message)
+
 
 @Client.on_callback_query(filters.regex("main_about"))
 async def about_callback(client: Client, callback_query: CallbackQuery):
     await send_about_menu(callback_query.message, edit=True)
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
+
 
 async def send_about_menu(message, edit=False):
     about_text = (
@@ -225,11 +206,10 @@ async def send_about_menu(message, edit=False):
 # ==========================================================
 @Client.on_message(filters.command("id") & filters.private)
 async def id_cmd(client: Client, message: Message):
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+
     user = message.from_user
     premium_status = "True" if user.is_premium else "False"
     first_name = user.first_name if user.first_name else "None"
@@ -253,25 +233,20 @@ async def id_cmd(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /settings COMMAND (Image 2 - Main Settings Menu)
+# 🔹 /settings COMMAND
 # ==========================================================
 @Client.on_message(filters.command("settings") & filters.private)
 async def settings_cmd(client: Client, message: Message):
-    await send_main_settings(message)
-    from utils.fsub_middleware import check_force_sub
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-    # ... original code
+    await send_main_settings(message)
+
 
 @Client.on_callback_query(filters.regex("main_settings"))
 async def settings_callback(client: Client, callback_query: CallbackQuery):
     await send_main_settings(callback_query.message, edit=True)
-    from utils.fsub_middleware import check_force_sub
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-    # ... original code
+
 
 async def send_main_settings(message, edit=False):
     text = (
