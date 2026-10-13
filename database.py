@@ -445,6 +445,78 @@ class Database:
             "banned_users": await self.banned_users.count_documents({})
         }
 
+    # ==========================================================
+    # SHORTLINK MANAGEMENT
+    # ==========================================================
+
+    async def set_shortlink_url(self, bot_username, url):
+        await self.settings.update_one(
+            {"key": f"shortlink_url_{bot_username}"},
+            {
+                "$set": {
+                    "key": f"shortlink_url_{bot_username}",
+                    "value": url
+                }
+            },
+            upsert=True
+        )
+
+    async def get_shortlink_url(self, bot_username):
+        record = await self.settings.find_one(
+            {"key": f"shortlink_url_{bot_username}"}
+        )
+        return record["value"] if record else None
+
+    async def set_shortlink_api(self, bot_username, api):
+        await self.settings.update_one(
+            {"key": f"shortlink_api_{bot_username}"},
+            {
+                "$set": {
+                    "key": f"shortlink_api_{bot_username}",
+                    "value": api
+                }
+            },
+            upsert=True
+        )
+
+    async def get_shortlink_api(self, bot_username):
+        record = await self.settings.find_one(
+            {"key": f"shortlink_api_{bot_username}"}
+        )
+        return record["value"] if record else None
+
+    async def set_shortlink_status(self, bot_username, status: bool):
+        await self.settings.update_one(
+            {"key": f"shortlink_status_{bot_username}"},
+            {
+                "$set": {
+                    "key": f"shortlink_status_{bot_username}",
+                    "value": status
+                }
+            },
+            upsert=True
+        )
+
+    async def get_shortlink_status(self, bot_username):
+        record = await self.settings.find_one(
+            {"key": f"shortlink_status_{bot_username}"}
+        )
+        return record["value"] if record else False
+
+    async def delete_shortlink(self, bot_username):
+        await self.settings.delete_many(
+            {
+                "key": {
+                    "$in": [
+                        f"shortlink_url_{bot_username}",
+                        f"shortlink_api_{bot_username}",
+                        f"shortlink_status_{bot_username}"
+                    ]
+                }
+            }
+        )
+
 
 # Global database instance
 db = Database()
+
