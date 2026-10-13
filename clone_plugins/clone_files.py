@@ -3,6 +3,7 @@ from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 from utils.shortener import shorten_url
+from utils.verify_helper import needs_verification, mark_verified
 import base64
 import time
 
@@ -31,8 +32,11 @@ async def clone_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
-        "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 (𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗟𝗶𝗻𝗸 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
-        f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username}  ʙᴏᴛ ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛ",
+        "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 "
+        "(𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 "
+        "𝗟𝗶𝗻𝗸 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
+        f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username}  ʙᴏᴛ ɪs ᴀᴅᴍɪɴ "
+        "ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛ",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -92,6 +96,39 @@ async def handle_clone_link(client: Client, message: Message):
         return
     user_states.pop(user_id, None)
 
+    bot_username = (await client.get_me()).username
+
+    # Verification gate
+    if await needs_verification(user_id, bot_username):
+        v_url = await db.get_verify_shortlink_url(bot_username)
+        v_api = await db.get_verify_shortlink_api(bot_username)
+        tutorial = await db.get_verify_tutorial(bot_username)
+
+        direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
+        short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
+
+        buttons = []
+        if short:
+            buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
+        if tutorial:
+            buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
+        buttons.append([InlineKeyboardButton("💎 Get Premium", callback_data="premium")])
+
+        return await message.reply_text(
+            f"ʜᴇʏ {message.from_user.first_name}\n\n"
+            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
+            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
+            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ 😊.\n\n"
+            "इस बॉट को इस्तेमाल करने के लिए आपको रोजाना 2 बार verify करना "
+            "होगा नहीं तो आप इसका इस्तेमाल नहीं कर पाएंगे |\n\n"
+            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2\n\n"
+            "ɪꜰ ʏᴏᴜ ᴡᴀɴᴛ ᴅɪʀᴇᴄᴛ ꜰɪʟᴇs ᴛʜᴇɴ ʏᴏᴜ ᴄᴀɴ ᴛᴀᴋᴇ ᴘʀᴇᴍɪᴜᴍ "
+            "sᴇʀᴠɪᴄᴇ (ɴᴏ ɴᴇᴇᴅ ᴛᴏ ᴠᴇʀɪғʏ)\n\n"
+            "ꜰᴏʀ ᴍᴏʀᴇ ᴅᴇᴛᴀɪʟs /plan & /refer",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
+        )
+
     file_id = None
     if message.document:
         file_id = message.document.file_id
@@ -119,10 +156,7 @@ async def handle_clone_link(client: Client, message: Message):
 
     await db.save_stored_file(unique_id, file_id, message.id, message.chat.id, user_id, "single")
 
-    bot_username = (await client.get_me()).username
     direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
-
-    # Shortlink check
     sl_status = await db.get_shortlink_status(bot_username)
     sl_url = await db.get_shortlink_url(bot_username)
     sl_api = await db.get_shortlink_api(bot_username)
@@ -182,7 +216,6 @@ async def handle_clone_batch(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-
 # ==========================================================
 # 🔹 HANDLE BATCH COUNT
 # ==========================================================
@@ -201,6 +234,33 @@ async def handle_clone_batch_count(client: Client, message: Message):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await message.reply_text("⚠️ Invalid number (1-500).", reply_markup=InlineKeyboardMarkup(buttons))
 
+    bot_username = (await client.get_me()).username
+
+    # Verification gate
+    if await needs_verification(user_id, bot_username):
+        v_url = await db.get_verify_shortlink_url(bot_username)
+        v_api = await db.get_verify_shortlink_api(bot_username)
+        tutorial = await db.get_verify_tutorial(bot_username)
+
+        direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
+        short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
+
+        buttons = []
+        if short:
+            buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
+        if tutorial:
+            buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
+
+        return await message.reply_text(
+            f"ʜᴇʏ {message.from_user.first_name}\n\n"
+            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
+            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
+            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ 😊.\n\n"
+            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
+        )
+
     from_chat_id = state["from_chat_id"]
     start_id = state["start_id"]
     user_states.pop(user_id, None)
@@ -210,9 +270,7 @@ async def handle_clone_batch_count(client: Client, message: Message):
 
     await db.save_batch(unique_id, from_chat_id, start_id, count, user_id)
 
-    bot_username = (await client.get_me()).username
     direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
-
     sl_status = await db.get_shortlink_status(bot_username)
     sl_url = await db.get_shortlink_url(bot_username)
     sl_api = await db.get_shortlink_api(bot_username)
@@ -235,6 +293,22 @@ async def handle_clone_batch_count(client: Client, message: Message):
 
 
 # ==========================================================
+# 🔹 VERIFICATION CALLBACK (from verify shortlink click)
+# ==========================================================
+@Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
+async def handle_verify_callback(client: Client, message: Message):
+    user_id = int(message.matches[0].group(1))
+    bot_username = (await client.get_me()).username
+
+    await mark_verified(user_id, bot_username)
+
+    await message.reply_text(
+        "✅ **Verification Complete!**\n\n"
+        "Now you can download files."
+    )
+
+
+# ==========================================================
 # 🔹 CANCEL
 # ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
@@ -245,37 +319,3 @@ async def clone_cancel(client: Client, message: Message):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
 
-
-# ==========================================================
-# 🔹 LINK CLICK HONE PAR FILE BHEJNE WALA FUNCTION (CLONE)
-# ==========================================================
-@Client.on_message(filters.private & filters.regex(r"^/start (?!customize)(.+)"))
-async def clone_retrieve_file(client: Client, message: Message):
-    payload = message.text.split(" ", 1)[1].strip()
-
-    # Batch check
-    batch_data = await db.get_batch(payload)
-    if batch_data:
-        await message.reply_text(f"📦 Sending {batch_data['count']} files...")
-        for i in range(batch_data["count"]):
-            try:
-                await client.copy_message(
-                    chat_id=message.chat.id,
-                    from_chat_id=batch_data["from_chat_id"],
-                    message_id=batch_data["start_id"] + i
-                )
-            except Exception as e:
-                print(f"Batch error: {e}")
-        return
-
-    # Single file check
-    file_data = await db.get_stored_file(payload)
-    if file_data:
-        fid = file_data["file_id"]
-        if fid.startswith("text:"):
-            await message.reply_text(fid.replace("text:", ""))
-        else:
-            await message.reply_cached_media(fid, caption="📁 **Here is your file**")
-        return
-
-    await message.reply_text("❌ Invalid or expired link.")
