@@ -244,3 +244,38 @@ async def clone_cancel(client: Client, message: Message):
         user_states.pop(user_id, None)
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 LINK CLICK HONE PAR FILE BHEJNE WALA FUNCTION (CLONE)
+# ==========================================================
+@Client.on_message(filters.private & filters.regex(r"^/start (?!customize)(.+)"))
+async def clone_retrieve_file(client: Client, message: Message):
+    payload = message.text.split(" ", 1)[1].strip()
+
+    # Batch check
+    batch_data = await db.get_batch(payload)
+    if batch_data:
+        await message.reply_text(f"📦 Sending {batch_data['count']} files...")
+        for i in range(batch_data["count"]):
+            try:
+                await client.copy_message(
+                    chat_id=message.chat.id,
+                    from_chat_id=batch_data["from_chat_id"],
+                    message_id=batch_data["start_id"] + i
+                )
+            except Exception as e:
+                print(f"Batch error: {e}")
+        return
+
+    # Single file check
+    file_data = await db.get_stored_file(payload)
+    if file_data:
+        fid = file_data["file_id"]
+        if fid.startswith("text:"):
+            await message.reply_text(fid.replace("text:", ""))
+        else:
+            await message.reply_cached_media(fid, caption="📁 **Here is your file**")
+        return
+
+    await message.reply_text("❌ Invalid or expired link.")
