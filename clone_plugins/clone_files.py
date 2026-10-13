@@ -16,6 +16,9 @@ user_states = {}
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def clone_link(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user_states[message.from_user.id] = "waiting_for_link_file"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
@@ -29,6 +32,9 @@ async def clone_link(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def clone_batch(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user_states[message.from_user.id] = "waiting_for_batch_file"
     bot_username = (await client.get_me()).username
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
@@ -47,6 +53,9 @@ async def clone_batch(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("custom_batch") & filters.private)
 async def clone_custom_batch(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user_states[message.from_user.id] = "waiting_for_custom_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
@@ -60,6 +69,9 @@ async def clone_custom_batch(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("multiple_batch") & filters.private)
 async def clone_multiple_batch(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user_states[message.from_user.id] = "waiting_for_multiple_batch"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
@@ -73,6 +85,9 @@ async def clone_multiple_batch(client: Client, message: Message):
 # ==========================================================
 @Client.on_message(filters.command("special_link") & filters.private)
 async def clone_special_link(client: Client, message: Message):
+    from utils.fsub_middleware import check_force_sub
+    if not await check_force_sub(client, message, bot_username):
+        return
     user_states[message.from_user.id] = "waiting_for_special_link"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await message.reply_text(
