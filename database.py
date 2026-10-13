@@ -73,7 +73,13 @@ class Database:
                 "user_id": user_id,
                 "token": token,
                 "bot_username": bot_username,
-                "active": True
+                "active": True,
+                "monetization": False,
+                "start_text": None,
+                "start_pic": None,
+                "start_buttons": [],
+                "total_requests": 0,
+                "balance": 0.00
             }},
             upsert=True
         )
