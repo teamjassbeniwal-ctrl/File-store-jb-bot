@@ -198,7 +198,6 @@ async def clone_id_cmd(client: Client, message: Message):
     )
     await message.reply_text(text)
 
-
 # ==========================================================
 # 🔹 /settings
 # ==========================================================
@@ -306,12 +305,41 @@ async def receive_log_channel(client: Client, message: Message):
     if edit_states.get(user_id) != "waiting_for_log_channel":
         return
 
+    if message.text and message.text.startswith("/"):
+        return
+
     if not message.forward_from_chat:
-        return await message.reply_text("⚠️ Please forward a message from your log channel.")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+        return await message.reply_text(
+            "⚠️ Please **forward a message** from your log channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     chat = message.forward_from_chat
-    if chat.type not in ("channel", "supergroup"):
-        return await message.reply_text("⚠️ Only channels/supergroups are allowed.")
+    chat_type = str(chat.type).lower().replace("chattype.", "")
+
+    if chat_type not in ("channel", "supergroup"):
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+        return await message.reply_text(
+            "⚠️ Only channels/supergroups are allowed.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    try:
+        bot_member = await client.get_chat_member(chat.id, "me")
+        if bot_member.status not in ("administrator", "creator", "owner"):
+            buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+            return await message.reply_text(
+                f"⚠️ I am **not an admin** in **{chat.title}**.\n\n"
+                "Please add me as admin, then try again.",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    except Exception as e:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
+        return await message.reply_text(
+            f"⚠️ Could not verify admin status.\n\nError: `{e}`",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     edit_states.pop(user_id, None)
 
@@ -324,7 +352,7 @@ async def receive_log_channel(client: Client, message: Message):
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
     await message.reply_text(
         f"✅ **Log Channel Set:** {chat.title}\n\n"
-        "All future user events will be logged here.",
+        f"🆔 `{chat.id}`",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -378,7 +406,7 @@ async def set_db_channel(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
 
     text = (
-        "ꜰᴏʀᴡᴀʀᴅ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ ᴀɴʏ ᴍᴇssᴀɢᴇ ᴛᴏ ᴍᴇ,\n"
+        f"ꜰᴏʀᴡᴀʀᴅ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ ᴀɴʏ ᴍᴇssᴀɢᴇ ᴛᴏ ᴍᴇ,\n"
         f"ᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ.\n\n"
         "/cancel - ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘʀᴏᴄᴇss."
     )
@@ -392,12 +420,41 @@ async def receive_db_channel(client: Client, message: Message):
     if edit_states.get(user_id) != "waiting_for_db_channel":
         return
 
+    if message.text and message.text.startswith("/"):
+        return
+
     if not message.forward_from_chat:
-        return await message.reply_text("⚠️ Please forward a message from your DB channel.")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            "⚠️ Please **forward a message** from your database channel.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     chat = message.forward_from_chat
-    if chat.type not in ("channel", "supergroup"):
-        return await message.reply_text("⚠️ Only channels/supergroups are allowed.")
+    chat_type = str(chat.type).lower().replace("chattype.", "")
+
+    if chat_type not in ("channel", "supergroup"):
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            "⚠️ Only channels/supergroups are allowed.",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
+    try:
+        bot_member = await client.get_chat_member(chat.id, "me")
+        if bot_member.status not in ("administrator", "creator", "owner"):
+            buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+            return await message.reply_text(
+                f"⚠️ I am **not an admin** in **{chat.title}**.\n\n"
+                "Please add me as admin, then try again.",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    except Exception as e:
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
+        return await message.reply_text(
+            f"⚠️ Could not verify admin status.\n\nError: `{e}`",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     edit_states.pop(user_id, None)
 
@@ -409,7 +466,8 @@ async def receive_db_channel(client: Client, message: Message):
 
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
     await message.reply_text(
-        f"✅ **Database Channel Set:** {chat.title}",
+        f"✅ **Database Channel Set:** {chat.title}\n\n"
+        f"🆔 `{chat.id}`",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -472,7 +530,8 @@ async def receive_add_admin(client: Client, message: Message):
     try:
         new_admin = int(message.text.strip())
     except ValueError:
-        return await message.reply_text("❌ Invalid user ID.")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+        return await message.reply_text("❌ Invalid user ID.", reply_markup=InlineKeyboardMarkup(buttons))
 
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
@@ -485,7 +544,7 @@ async def receive_add_admin(client: Client, message: Message):
             await db.update_clone_setting(clone_data["user_id"], "admins", admins)
 
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
-    await message.reply_text(f"✅ Admin {new_admin} added.", reply_markup=InlineKeyboardMarkup(buttons))
+    await message.reply_text(f"✅ Admin `{new_admin}` added.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_callback_query(filters.regex("^c_remove_admin$"))
@@ -511,7 +570,8 @@ async def receive_remove_admin(client: Client, message: Message):
     try:
         rem_admin = int(message.text.strip())
     except ValueError:
-        return await message.reply_text("❌ Invalid user ID.")
+        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
+        return await message.reply_text("❌ Invalid user ID.", reply_markup=InlineKeyboardMarkup(buttons))
 
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
@@ -524,8 +584,7 @@ async def receive_remove_admin(client: Client, message: Message):
             await db.update_clone_setting(clone_data["user_id"], "admins", admins)
 
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
-    await message.reply_text(f"✅ Admin {rem_admin} removed.", reply_markup=InlineKeyboardMarkup(buttons))
-
+    await message.reply_text(f"✅ Admin `{rem_admin}` removed.", reply_markup=InlineKeyboardMarkup(buttons))
 
 # ==========================================================
 # 🔹 BOT STATUS
@@ -533,8 +592,6 @@ async def receive_remove_admin(client: Client, message: Message):
 @Client.on_callback_query(filters.regex("^c_status$"))
 async def bot_status(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-
     total_users = await db.users.count_documents({})
     banned_users = await db.banned_users.count_documents({})
 
@@ -599,16 +656,28 @@ async def set_bot_mode(client: Client, callback_query: CallbackQuery):
 
 
 # ==========================================================
-# 🔹 RESTART BOT
+# 🔹 RESTART BOT (Fixed Deadlock)
 # ==========================================================
 @Client.on_callback_query(filters.regex("^c_restart$"))
 async def restart_bot(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("⏱️ Restarting clone bot...", show_alert=True)
-    await asyncio.sleep(2)
-    # Gracefully restart the clone bot's client
-    await client.restart()
+
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
-    await callback_query.message.edit_text("✅ Bot restarted successfully!", reply_markup=InlineKeyboardMarkup(buttons))
+    await callback_query.message.edit_text(
+        "⏱️ **Restarting bot...**\n\nThe bot will be back online in a few seconds.",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+    asyncio.create_task(_delayed_restart(client))
+
+
+async def _delayed_restart(client: Client):
+    await asyncio.sleep(3)
+    try:
+        await client.restart()
+        print("✅ Clone bot restarted successfully.")
+    except Exception as e:
+        print(f"⚠️ Restart failed: {e}")
 
 
 # ==========================================================
@@ -637,8 +706,7 @@ async def confirm_delete_bot(client: Client, callback_query: CallbackQuery):
         await db.delete_clone(clone_data["user_id"])
 
     await callback_query.message.edit_text(
-        "✅ **Bot deleted.**\n\n"
-        "You can now create a new clone from the main bot with /clone."
+        "✅ **Bot deleted.**\n\nYou can now create a new clone from the main bot with /clone."
     )
 
 
@@ -788,3 +856,4 @@ async def clone_unban(client: Client, message: Message):
 
     await db.unban_user(target_id)
     await message.reply_text(f"✅ User {target_id} unbanned.")
+    
