@@ -26,6 +26,16 @@ async def fsub_menu(client: Client, callback_query: CallbackQuery):
     status = await db.get_fsub_status(bot_username)
     status_text = "ᴏɴ ✅" if status else "ᴏꜰꜰ ❌"
 
+    # Get channel list
+    channels = await db.get_force_channels(bot_username)
+    ch_list = ""
+    if channels:
+        for i, ch in enumerate(channels, 1):
+            mode_icon = "📩" if ch.get("mode") == "request" else "🔔"
+            ch_list += f"\n{mode_icon} {i}. {ch['name']}"
+    else:
+        ch_list = "\n\nʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴄʜᴀɴɴᴇʟs."
+
     text = (
         "📢 **FORCE SUBSCRIBE:**\n\n"
         "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ:\n"
@@ -38,18 +48,56 @@ async def fsub_menu(client: Client, callback_query: CallbackQuery):
         "ᴊᴏɪɴ ʀᴇǫᴜᴇsᴛ ғsᴜʙ:\n"
         "ʀᴇǫᴜɪʀᴇs ᴛʜᴇ ᴜsᴇʀ ᴛᴏ sᴇɴᴅ ᴀ ʀᴇǫᴜᴇsᴛ ᴛᴏ ᴊᴏɪɴ ᴀ ᴘʀɪᴠᴀᴛᴇ "
         "ᴄʜᴀɴɴᴇʟ ᴏʀ ɢʀᴏᴜᴘ ᴛʜᴇɴ ᴜsᴇʀ ᴄᴀɴ ᴀᴄᴄᴇss ᴄᴏɴᴛᴇɴᴛ.\n\n"
-        "ʏᴏᴜ ᴄᴀɴ ᴀᴅᴅ ᴍᴜʟᴛɪᴘʟᴇ ᴄʜᴀɴɴᴇʟs\n\n"
+        f"📋 **CHANNELS:**{ch_list}\n\n"
         f"ꜰᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ - {status_text}"
     )
 
     buttons = [
         [InlineKeyboardButton("Add Channel", callback_data="mfsub_add"),
-         InlineKeyboardButton("Auto Add Channels", callback_data="mfsub_auto_add")],
+         InlineKeyboardButton("Delete Channel", callback_data="mfsub_del")],
+        [InlineKeyboardButton("Auto Add Channels", callback_data="mfsub_auto_add")],
         [InlineKeyboardButton("Force Subscribe On/Off", callback_data="mfsub_toggle")],
         [InlineKeyboardButton("Force Subscribe Message", callback_data="mfsub_msg")],
         [InlineKeyboardButton("🔙 Back", callback_data="main_settings")]
     ]
     await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+# ==========================================================
+# 🔹 DELETE CHANNEL
+# ==========================================================
+@Client.on_callback_query(filters.regex("^mfsub_del$"))
+async def fsub_delete_menu(client: Client, callback_query: CallbackQuery):
+    bot_username = (await client.get_me()).username
+    channels = await db.get_force_channels(bot_username)
+
+    if not channels:
+        return await callback_query.answer("⚠️ No channels to delete.", show_alert=True)
+
+    buttons = []
+    for i, ch in enumerate(channels, 1):
+        mode_icon = "📩" if ch.get("mode") == "request" else "🔔"
+        buttons.append([
+            InlineKeyboardButton(
+                f"❌ {mode_icon} {ch['name']}",
+                callback_data=f"mfsub_del_{ch['id']}"
+            )
+        ])
+    buttons.append([InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")])
+
+    text = "🗑️ **Select a channel to delete:**"
+    await safe_edit(callback_query.message, text, InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex(r"^mfsub_del_-?\d+$"))
+async def fsub_delete_channel(client: Client, callback_query: CallbackQuery):
+    # Extract channel id from callback data
+    channel_id = int(callback_query.data.replace("mfsub_del_", ""))
+    bot_username = (await client.get_me()).username
+
+    await db.remove_force_channel(bot_username, channel_id)
+    await callback_query.answer("✅ Channel deleted.", show_alert=True)
+    await fsub_menu(client, callback_query)
 
 
 # ==========================================================
@@ -87,9 +135,6 @@ async def fsub_receive_channel(client: Client, message: Message):
     chat = message.forward_from_chat
     bot_username = (await client.get_me()).username
 
-    # ==========================================================
-    # 🔹 ADMIN CHECK (Fixed Enum Comparison)
-    # ==========================================================
     try:
         fetched_chat = await client.get_chat(chat.id)
         chat_title = fetched_chat.title or chat.title
@@ -97,9 +142,7 @@ async def fsub_receive_channel(client: Client, message: Message):
         me = await client.get_me()
         member = await client.get_chat_member(chat.id, me.id)
 
-        # ✅ Convert enum to string properly
         status_str = str(member.status).split(".")[-1].lower()
-
         print(f"DEBUG: Bot @{me.username} status in {chat_title}: {status_str}")
 
         if status_str not in ("administrator", "creator", "owner"):
@@ -123,9 +166,6 @@ async def fsub_receive_channel(client: Client, message: Message):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
-    # ==========================================================
-    # 🔹 MODE SELECT
-    # ==========================================================
     fsub_states[user_id] = {
         "state": "waiting_fsub_mode",
         "chat_id": chat.id,
@@ -180,8 +220,8 @@ async def fsub_toggle(client: Client, callback_query: CallbackQuery):
 async def fsub_msg_menu(client: Client, callback_query: CallbackQuery):
     text = (
         "📝 **FORCE SUBSCRIBE MESSAGE:**\n\n"
-        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ: ʏᴏᴜ ᴄᴀɴ ᴄᴜsᴛᴏᴍɪsᴇ ʏᴏᴜʀ ᴄʟᴏɴᴇ "
-        "ʙᴏᴛ ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ ᴀɴʏ ᴡᴀʏ ʏᴏᴜ ʟɪᴋᴇ."
+        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ: ʏᴏᴜ ᴄᴀɴ ᴄᴜsᴛᴏᴍɪsᴇ ʏᴏᴜʀ "
+        "ғᴏʀᴄᴇ sᴜʙsᴄʀɪʙᴇ ᴍᴇssᴀɢᴇ ᴀɴʏ ᴡᴀʏ ʏᴏᴜ ʟɪᴋᴇ."
     )
     buttons = [
         [InlineKeyboardButton("Set Subscribe Text", callback_data="mfsub_set_text")],
@@ -287,7 +327,7 @@ async def fsub_receive_image(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 AUTO ADD CHANNELS (Fixed Enum Comparison)
+# 🔹 AUTO ADD CHANNELS
 # ==========================================================
 @Client.on_callback_query(filters.regex("^mfsub_auto_add$"))
 async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
@@ -298,7 +338,7 @@ async def fsub_auto_add(client: Client, callback_query: CallbackQuery):
         "**Format:**\n"
         "`-1001234567890`\n"
         "`-1009876543210`\n\n"
-        "⚠️ **Note:** This method is unreliable. Use **Add Channel** (forward method) instead.\n\n"
+        "⚠️ **Warning:** Manual ID method is unreliable. Use **Add Channel** (forward method) instead.\n\n"
         "/cancel - Cancel this process"
     )
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_force_sub")]]
@@ -327,10 +367,7 @@ async def fsub_receive_auto_channels(client: Client, message: Message):
             chat_id = int(line)
             chat = await client.get_chat(chat_id)
             member = await client.get_chat_member(chat_id, "me")
-
-            # ✅ Enum → string conversion
             status_str = str(member.status).split(".")[-1].lower()
-
             if status_str not in ("administrator", "creator", "owner"):
                 failed.append(f"{chat.title} (not admin)")
                 continue
