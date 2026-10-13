@@ -2,12 +2,11 @@
 from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
-from config import OWNER_ID
 import asyncio
 
 
 # ==========================================================
-# 🔹 CLONE BOT /start
+# 🔹 /start
 # ==========================================================
 @Client.on_message(filters.command("start") & filters.private)
 async def clone_start(client: Client, message: Message):
@@ -15,10 +14,8 @@ async def clone_start(client: Client, message: Message):
     first_name = message.from_user.first_name
     bot_username = (await client.get_me()).username
 
-    # Handle deep link
     if len(message.command) > 1:
         payload = message.command[1]
-
         if payload == "customize":
             clone_data = await db.get_clone_by_username(bot_username)
             if clone_data and clone_data["user_id"] == user_id:
@@ -52,7 +49,6 @@ async def clone_start(client: Client, message: Message):
             await message.reply_text("❌ Invalid or expired link.")
             return
 
-    # Normal /start
     text = (
         f"ʜᴇʏ {first_name} 👋,\n\n"
         "ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ ᴡɪᴛʜ ᴄʟᴏɴᴇ ᴀɴᴅ ᴍᴀɴʏ ᴀᴍᴀᴢɪɴɢ ᴀᴅᴠᴀɴᴄᴇ ғᴇᴀᴛᴜʀᴇ ᴀɴᴅ ᴜsᴇʀs ᴄᴀɴ ᴀᴄᴄᴇss sᴛᴏʀᴇᴅ ᴍᴇssᴀɢᴇs ʙʏ ᴜsɪɴɢ ᴀ sʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ ɢɪᴠᴇɴ ʙʏ ᴍᴇ\n\n"
@@ -167,7 +163,7 @@ async def clone_id_cmd(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /settings (Clone Menu - Image 6)
+# 🔹 /settings
 # ==========================================================
 @Client.on_message(filters.command("settings") & filters.private)
 async def clone_settings_cmd(client: Client, message: Message):
@@ -226,16 +222,16 @@ async def send_clone_settings(message, edit=False):
 async def settings_button_handler(client: Client, callback_query: CallbackQuery):
     key = callback_query.data.replace("c_", "")
     messages = {
-        "monetization": "💰 **MONETIZATION**\n\nConfigure shortlink API and earnings.",
-        "start_msg": "📝 **START MESSAGE**\n\nSend me the message to display on /start.",
-        "log_channel": "📢 **LOG CHANNEL**\n\nForward a message from your log channel.",
-        "db_channel": "☁️ **DATABASE CHANNEL**\n\nForward a message from your DB channel.",
-        "admins": "👥 **ADMINS**\n\nSend me user IDs (one per line) to promote.",
-        "status": "📊 **BOT STATUS**\n\nYour clone bot is running normally.",
-        "bot_mode": "🛍️ **BOT MODE**\n\nChoose: Public / Private / Approval.",
-        "restart": "⏱️ **RESTART BOT**\n\nSend /restart_confirm to restart.",
-        "delete_bot": "🚫 **DELETE BOT**\n\nSend /delete_confirm to permanently delete.",
-        "more_features": "🔍 **MORE FEATURES**\n\nComing soon!"
+        "monetization": "💰 MONETIZATION\n\nConfigure shortlink API and earnings.",
+        "start_msg": "📝 START MESSAGE\n\nSend me the message to display on /start.",
+        "log_channel": "📢 LOG CHANNEL\n\nForward a message from your log channel.",
+        "db_channel": "☁️ DATABASE CHANNEL\n\nForward a message from your DB channel.",
+        "admins": "👥 ADMINS\n\nSend me user IDs (one per line) to promote.",
+        "status": "📊 BOT STATUS\n\nYour clone bot is running normally.",
+        "bot_mode": "🛍️ BOT MODE\n\nChoose: Public / Private / Approval.",
+        "restart": "⏱️ RESTART BOT\n\nSend /restart_confirm to restart.",
+        "delete_bot": "🚫 DELETE BOT\n\nSend /delete_confirm to permanently delete.",
+        "more_features": "🔍 MORE FEATURES\n\nComing soon!"
     }
     await callback_query.answer(messages.get(key, "Coming soon"), show_alert=True)
 
@@ -262,7 +258,7 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
 
 
 # ==========================================================
-# 🔹 /broadcast (Clone Owner Only)
+# 🔹 /broadcast
 # ==========================================================
 @Client.on_message(filters.command("broadcast") & filters.private)
 async def clone_broadcast(client: Client, message: Message):
@@ -271,7 +267,7 @@ async def clone_broadcast(client: Client, message: Message):
     clone_data = await db.get_clone_by_username(bot_username)
 
     if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ **Owner only command.**")
+        return await message.reply_text("❌ Owner only command.")
 
     if not message.reply_to_message:
         return await message.reply_text("⚠️ Reply to a message to broadcast.")
@@ -290,7 +286,7 @@ async def clone_broadcast(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /ban and /unban (Clone Owner Only)
+# 🔹 /ban and /unban (CORRECTED)
 # ==========================================================
 @Client.on_message(filters.command("ban") & filters.private)
 async def clone_ban(client: Client, message: Message):
@@ -299,10 +295,10 @@ async def clone_ban(client: Client, message: Message):
     clone_data = await db.get_clone_by_username(bot_username)
 
     if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ **Owner only command.**")
+        return await message.reply_text("❌ Owner only command.")
 
     if len(message.command) < 2:
-        return await message.reply_text("⚠️ Usage: `/ban <user_id>`")
+        return await message.reply_text("⚠️ Usage: /ban [user_id]")
 
     try:
         target_id = int(message.command[1])
@@ -310,7 +306,7 @@ async def clone_ban(client: Client, message: Message):
         return await message.reply_text("❌ Invalid user ID.")
 
     await db.ban_user(target_id)
-    await message.reply_text(f"✅ User `{target_id}` banned.")
+    await message.reply_text(f"✅ User {target_id} banned.")
 
 
 @Client.on_message(filters.command("unban") & filters.private)
@@ -320,10 +316,10 @@ async def clone_unban(client: Client, message: Message):
     clone_data = await db.get_clone_by_username(bot_username)
 
     if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ **Owner only command.**")
+        return await message.reply_text("❌ Owner only command.")
 
     if len(message.command) < 2:
-        return await message.reply_text("⚠️ Usage: `/unban <user_id>`")
+        return await message.reply_text("⚠️ Usage: /unban [user_id]")
 
     try:
         target_id = int(message.command[1])
@@ -331,4 +327,4 @@ async def clone_unban(client: Client, message: Message):
         return await message.reply_text("❌ Invalid user ID.")
 
     await db.unban_user(target_id)
-    await message.reply_text(f"✅ User `{target_id}` unbanned.")
+    await message.reply_text(f"✅ User {target_id} unbanned.")
