@@ -6,6 +6,7 @@ from utils.shortener import shorten_url
 from utils.verify_helper import needs_verification, mark_verified
 from utils.fsub_helper import check_subscription, build_fsub_keyboard
 from utils.fsub_middleware import check_force_sub
+from utils.logger import log_media_event
 import base64
 import time
 
@@ -129,14 +130,7 @@ async def handle_link_file(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-
-            default_text = (
-                "📢 **Please Join Our Channels**\n\n"
-                "To use this bot, you must join the channels below.\n"
-                "After joining, click **✅ I Joined**."
-            )
-            msg_text = fsub_text or default_text
-
+            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -148,23 +142,16 @@ async def handle_link_file(client: Client, message: Message):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
         tutorial = await db.get_verify_tutorial(bot_username)
-
         direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
         short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
-
         buttons = []
         if short:
             buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
         if tutorial:
             buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
         buttons.append([InlineKeyboardButton("💎 Get Premium", callback_data="premium")])
-
         return await message.reply_text(
-            f"ʜᴇʏ {message.from_user.first_name}\n\n"
-            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
-            "ᴛᴀᴘ ᴏɴ ᴛʜᴇ ᴠᴇʀɪғʏ ʟɪɴᴋ & ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴀᴄᴄᴇss "
-            "ꜰᴏʀ ᴛɪʟʟ ɴᴇxᴛ ᴠᴇʀɪғɪᴄᴀᴛɪᴏɴ 😊.\n\n"
-            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
@@ -218,6 +205,19 @@ async def handle_link_file(client: Client, message: Message):
         disable_web_page_preview=True
     )
 
+    # ==========================================================
+    # 🔹 CENTRAL MASTER LOGGING
+    # ==========================================================
+    await log_media_event(
+        client=client,
+        event_type="media_upload",
+        message=message,
+        bot_username=bot_username,
+        user_id=user_id,
+        username=message.from_user.username,
+        clone_owner_id=None,
+        extra=f"🔗 Link: {final_link}"
+    )
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
@@ -286,14 +286,7 @@ async def handle_batch_count(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-
-            default_text = (
-                "📢 **Please Join Our Channels**\n\n"
-                "To use this bot, you must join the channels below.\n"
-                "After joining, click **✅ I Joined**."
-            )
-            msg_text = fsub_text or default_text
-
+            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -305,20 +298,15 @@ async def handle_batch_count(client: Client, message: Message):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
         tutorial = await db.get_verify_tutorial(bot_username)
-
         direct = f"https://telegram.me/{bot_username}?start=verify_{user_id}"
         short = await shorten_url(v_url, v_api, direct) if v_url and v_api else direct
-
         buttons = []
         if short:
             buttons.append([InlineKeyboardButton("✅ Verify Now", url=short)])
         if tutorial:
             buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
-
         return await message.reply_text(
-            f"ʜᴇʏ {message.from_user.first_name}\n\n"
-            "ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n"
-            "#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
@@ -352,6 +340,20 @@ async def handle_batch_count(client: Client, message: Message):
         f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
         reply_markup=InlineKeyboardMarkup(buttons),
         disable_web_page_preview=True
+    )
+
+    # ==========================================================
+    # 🔹 CENTRAL MASTER LOGGING (Batch)
+    # ==========================================================
+    await log_media_event(
+        client=client,
+        event_type="batch_upload",
+        message=message,
+        bot_username=bot_username,
+        user_id=user_id,
+        username=message.from_user.username,
+        clone_owner_id=None,
+        extra=f"📁 Batch Count: {count}\n🔗 Link: {final_link}"
     )
 
 
