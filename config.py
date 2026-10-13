@@ -11,6 +11,6 @@ DB_NAME = "FileStoreBot"
 
 # Your Telegram ID (Owner)
 OWNER_ID = int(os.environ.get("OWNER_ID", "1955406483"))
-
+DB_CHANNEL_ID = int(os.environ.get("DB_CHANNEL_ID", 0))
 # Force Subscribe Channel ID (e.g., -100123456789)
 FORCE_SUB_CHANNEL = int(os.environ.get("FORCE_SUB_CHANNEL", 0))
