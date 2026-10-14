@@ -14,6 +14,19 @@ user_states = {}
 
 
 # ==========================================================
+# 🔹 AUTO DELETE HELPER
+# ==========================================================
+async def _auto_delete_file(client: Client, message, seconds: int):
+    print(f"⏱️ Auto-delete scheduled in {seconds}s")
+    await asyncio.sleep(seconds)
+    try:
+        await message.delete()
+        print("✅ Auto-deleted.")
+    except Exception as e:
+        print(f"⚠️ Auto-delete failed: {e}")
+
+
+# ==========================================================
 # 🔹 /link
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
@@ -46,17 +59,6 @@ async def clone_batch(client: Client, message: Message):
         f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username} ɪs ᴀᴅᴍɪɴ",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
-
-
-# ==========================================================
-# 🔹 AUTO DELETE HELPER
-# ==========================================================
-async def _auto_delete_file(client: Client, message, seconds: int):
-    await asyncio.sleep(seconds)
-    try:
-        await message.delete()
-    except Exception:
-        pass
 
 
 # ==========================================================
@@ -168,7 +170,7 @@ async def handle_clone_link(client: Client, message: Message):
     autodel_status = await db.get_auto_delete_status(bot_username)
     autodel_time = await db.get_auto_delete_time(bot_username)
 
-    # Replace placeholders
+    # Replace caption placeholders
     if message.document:
         caption = caption.replace("{file_name}", message.document.file_name or "file")
         if message.document.file_size:
@@ -256,27 +258,28 @@ async def handle_clone_link(client: Client, message: Message):
                 reply_markup=reply_markup
             )
 
-        # Delete original message
+        # Delete original
         try:
             await message.delete()
         except Exception:
             pass
 
-        # Auto delete
+        # ==========================================================
+        # 🔹 AUTO DELETE
+        # ==========================================================
         if autodel_status and sent:
             seconds = int(autodel_time[:-1]) * (60 if autodel_time.endswith("m") else 3600)
             asyncio.create_task(_auto_delete_file(client, sent, seconds))
 
     except Exception as e:
         print(f"File send error: {type(e).__name__}: {e}")
-        # Fallback
         await message.reply_text(
             f"✅ **File Stored!**\n\n🔗 **Link:**\n`{final_link}`",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔗 Open Link", url=final_link)],
                 [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
             ])
-        )
+    )
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
