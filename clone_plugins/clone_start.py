@@ -64,7 +64,7 @@ async def clone_start(client: Client, message: Message):
                     await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
                 return
 
-    # Deep link handler
+    # Deep link handler — with custom settings
     if message.text and " " in message.text:
         parts = message.text.split(maxsplit=1)
         if len(parts) > 1:
@@ -116,24 +116,12 @@ async def clone_start(client: Client, message: Message):
                         reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
                         try:
-                            # Send with proper method to support thumbnail
                             sent = await client.send_cached_media(
                                 chat_id=message.chat.id,
                                 file_id=fid,
                                 caption=caption,
                                 reply_markup=reply_markup
                             )
-
-                            # Try with thumb if applicable
-                            if thumb:
-                                try:
-                                    await message.delete()
-                                except Exception:
-                                    pass
-                                # Re-send with thumb based on type
-                                # For simplicity, use send_cached_media with thumb works for docs/videos
-
-                            # Auto delete
                             if autodel_status and sent:
                                 seconds = int(autodel_time[:-1]) * (60 if autodel_time.endswith("m") else 3600)
                                 asyncio.create_task(_auto_delete_file(client, sent, seconds))
@@ -205,8 +193,7 @@ async def clone_help_cb(client: Client, callback_query: CallbackQuery):
 async def send_clone_help(message, edit=False):
     text = (
         "🎓 **HELP MENU:**\n\n"
-        "🤖 ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ\n"
-        "🔗 ᴀꜰᴛᴇʀ ꜱᴛᴏʀɪɴɢ, ɪ ᴡɪʟʟ ɢᴇɴᴇʀᴀᴛᴇ ᴀ ꜱʜᴀʀᴇᴀʙʟᴇ ʟɪɴᴋ.\n\n"
+        "🤖 ɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴇɴᴛ ꜰɪʟᴇ ꜱᴛᴏʀᴇ ʙᴏᴛ\n\n"
         "📚 **BASIC**\n➤ /start\n➤ /id\n\n"
         "📦 **FILE STORAGE**\n➤ /link\n➤ /batch\n\n"
         "💎 **PREMIUM**\n➤ /myplan\n➤ /redeem\n\n"
@@ -224,9 +211,6 @@ async def send_clone_help(message, edit=False):
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 ABOUT
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_about$"))
 async def clone_about_cb(client: Client, callback_query: CallbackQuery):
     text = (
@@ -244,9 +228,6 @@ async def clone_about_cb(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 /id
-# ==========================================================
 @Client.on_message(filters.command("id") & filters.private)
 async def clone_id_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -268,9 +249,6 @@ async def clone_id_cmd(client: Client, message: Message):
     await message.reply_text(text)
 
 
-# ==========================================================
-# 🔹 /settings
-# ==========================================================
 @Client.on_message(filters.command("settings") & filters.private)
 async def user_settings_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -285,11 +263,7 @@ async def user_settings_cb(client: Client, callback_query: CallbackQuery):
 
 
 async def send_user_settings(message, edit=False):
-    text = (
-        "⚙️ **SETTINGS:**\n\n"
-        "ᴄᴜsᴛᴏᴍɪᴢᴇ ʏᴏᴜʀ sᴇᴛᴛɪɴɢs ᴀs ᴘᴇʀ ʏᴏᴜʀ ɴᴇᴇᴅ.\n\n"
-        "ɴᴏᴛᴇ: ᴛʜᴇ sᴇᴛᴛɪɴɢs ʙᴇʟᴏᴡ ᴡɪʟʟ ᴏɴʟʏ ᴡᴏʀᴋ ғᴏʀ ʟɪɴᴋs ᴄʀᴇᴀᴛᴇᴅ ʙʏ ᴛʜɪs ᴀᴄᴄᴏᴜɴᴛ."
-    )
+    text = "⚙️ **SETTINGS:**\n\nᴄᴜsᴛᴏᴍɪᴢᴇ ʏᴏᴜʀ sᴇᴛᴛɪɴɢs ᴀs ᴘᴇʀ ʏᴏᴜʀ ɴᴇᴇᴅ."
     buttons = [
         [InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")],
         [InlineKeyboardButton("🆓 FREE USAGE LIMIT", callback_data="u_free_limit")],
@@ -311,9 +285,6 @@ async def send_user_settings(message, edit=False):
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 /customize
-# ==========================================================
 @Client.on_message(filters.command("customize") & filters.private)
 async def customize_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -378,7 +349,7 @@ async def log_channel_menu(client: Client, callback_query: CallbackQuery):
 async def set_log_channel(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_log_channel"
     bot_username = (await client.get_me()).username
-    text = f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ʟᴏɢ ᴄʜᴀɴɴᴇʟ,\nᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ.\n\n/cancel - ᴄᴀɴᴄᴇʟ."
+    text = f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ʟᴏɢ ᴄʜᴀɴɴᴇʟ.\nᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ.\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -417,7 +388,7 @@ async def db_channel_menu(client: Client, callback_query: CallbackQuery):
 async def set_db_channel(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_db_channel"
     bot_username = (await client.get_me()).username
-    text = f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ,\nᴀɴᴅ ᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ.\n\n/cancel - ᴄᴀɴᴄᴇʟ."
+    text = f"ꜰᴏʀᴡᴀʀᴅ ᴀ ᴍᴇssᴀɢᴇ ꜰʀᴏᴍ ʏᴏᴜʀ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ.\nᴍᴀᴋᴇ sᴜʀᴇ @{bot_username} ɪs ᴀᴅᴍɪɴ.\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -439,7 +410,6 @@ async def caption_menu(client: Client, callback_query: CallbackQuery):
     from pyrogram.errors import MessageNotModified
     bot_username = (await client.get_me()).username
     caption = await db.get_custom_caption(bot_username)
-
     text = f"ʜᴇʀᴇ ʏᴏᴜ ᴄᴀɴ ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ʙᴏᴛ ɢɪᴠᴇɴ ꜰɪʟᴇ ᴄᴀᴘᴛɪᴏɴ.\n\nꜰɪʟᴇ ᴄᴀᴘᴛɪᴏɴ - {caption or '{file_name}'}"
     buttons = [
         [InlineKeyboardButton("Set Caption", callback_data="u_set_caption")],
@@ -455,7 +425,7 @@ async def caption_menu(client: Client, callback_query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^u_set_caption$"))
 async def set_caption_prompt(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_caption"
-    text = "sᴇɴᴅ ᴍᴇ ᴀ ꜰɪʟᴇ ᴄᴀᴘᴛɪᴏɴ.\n\nᴀᴠᴀɪʟᴀʙʟᴇ ғɪʟʟɪɴɢ:-\n{file_name}\n{file_size}\n{originalcaption}\n\n/cancel - ᴄᴀɴᴄᴇʟ."
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ꜰɪʟᴇ ᴄᴀᴘᴛɪᴏɴ.\n\nᴀᴠᴀɪʟᴀʙʟᴇ ғɪʟʟɪɴɢ:-\n{file_name}\n{file_size}\n{originalcaption}\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_caption")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -476,9 +446,7 @@ async def button_menu(client: Client, callback_query: CallbackQuery):
     from pyrogram.errors import MessageNotModified
     bot_username = (await client.get_me()).username
     buttons_data = await db.get_custom_buttons(bot_username)
-
     text = "ʜᴇʀᴇ ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ʙᴜᴛᴛᴏɴ ꜰᴏʀ ʏᴏᴜʀ ꜰɪʟᴇ.\n\nғᴏʀᴍᴀᴛ:\n[vj bot][buttonurl:https://t.me/vj_botz]"
-
     if buttons_data:
         buttons = [
             [InlineKeyboardButton("See Buttons", callback_data="u_see_buttons")],
@@ -499,7 +467,7 @@ async def button_menu(client: Client, callback_query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^u_add_buttons$"))
 async def add_buttons_prompt(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_buttons"
-    text = "sᴇɴᴅ ᴍᴇ ᴀ ʙᴜᴛᴛᴏɴ ɪɴ ᴛʜɪs ꜰᴏʀᴍᴀᴛ:\n\n[Button Text][buttonurl:https://link.com]\n\n/cancel - Cancel"
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ʙᴜᴛᴛᴏɴ:\n\n[Button Text][buttonurl:https://link.com]\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_button")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -508,13 +476,11 @@ async def add_buttons_prompt(client: Client, callback_query: CallbackQuery):
 async def see_buttons(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     buttons_data = await db.get_custom_buttons(bot_username)
-
     text = "📋 **Current Buttons:**\n\n"
     for row in buttons_data:
         for btn in row:
             text += f"• `{btn['text']}` → {btn['url']}\n"
         text += "\n"
-
     back_buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_button")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(back_buttons))
 
@@ -537,7 +503,6 @@ async def auto_delete_menu(client: Client, callback_query: CallbackQuery):
     status = await db.get_auto_delete_status(bot_username)
     time_str = await db.get_auto_delete_time(bot_username)
     status_text = "ᴏɴ ✅" if status else "ᴏꜰꜰ ❌"
-
     text = (
         "♻️ **MESSAGE AUTO DELETE:**\n\n"
         "ᴍᴇssᴀɢᴇ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ: ɪғ ᴛɪᴍᴇ ɪs sᴇᴛ ᴛʜᴇɴ ʙᴏᴛ ᴀᴜᴛᴏᴍᴀᴛɪᴄᴀʟʟʏ "
@@ -560,7 +525,7 @@ async def auto_delete_menu(client: Client, callback_query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^u_set_autodel_time$"))
 async def set_autodel_time(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_autodel_time"
-    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴛɪᴍᴇ ɪɴ ʟɪᴋᴇ ᴛʜɪs - 1h ᴏʀ 15m\n\n/cancel - ᴄᴀɴᴄᴇʟ."
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴛɪᴍᴇ - 1h ᴏʀ 15m\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_auto_delete")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -584,18 +549,6 @@ async def get_again_file(client: Client, callback_query: CallbackQuery):
     await auto_delete_menu(client, callback_query)
 
 
-@Client.on_callback_query(filters.regex("^u_autodel_msg$"))
-async def autodel_msg_menu(client: Client, callback_query: CallbackQuery):
-    text = "📝 **AUTO DELETE MESSAGE:**\n\nᴄᴜsᴛᴏᴍɪsᴇ ʏᴏᴜʀ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ᴍᴇssᴀɢᴇ."
-    buttons = [
-        [InlineKeyboardButton("Auto Delete Text", callback_data="u_adtext")],
-        [InlineKeyboardButton("Auto Delete Pic", callback_data="u_adpic")],
-        [InlineKeyboardButton("Auto Delete Buttons", callback_data="u_adbuttons")],
-        [InlineKeyboardButton("🔙 Back", callback_data="u_auto_delete")]
-    ]
-    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
 # ==========================================================
 # 🔹 THUMBNAIL
 # ==========================================================
@@ -604,10 +557,8 @@ async def thumbnail_menu(client: Client, callback_query: CallbackQuery):
     from pyrogram.errors import MessageNotModified
     bot_username = (await client.get_me()).username
     thumb = await db.get_custom_thumbnail(bot_username)
-
-    text = "🖼️ **CUSTOM THUMBNAIL:**\n\nᴄᴜsᴛᴏᴍ ᴛʜᴜᴍʙɴᴀɪʟ ɪs ᴀ ᴄᴏᴠᴇʀ ғᴏʀ ᴠɪᴅᴇᴏ ғɪʟᴇ.\n\n"
+    text = "🖼️ **CUSTOM THUMBNAIL:**\n\nᴄᴜsᴛᴏᴍ ᴛʜᴜᴍʙɴᴀɪʟ ғᴏʀ ᴠɪᴅᴇᴏ ғɪʟᴇ.\n\n"
     text += "✅ Thumbnail added." if thumb else "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴘɪᴄᴛᴜʀᴇ..."
-
     buttons = [
         [InlineKeyboardButton("Set Thumbnail", callback_data="u_set_thumb"),
          InlineKeyboardButton("View Thumbnail", callback_data="u_view_thumb")],
@@ -623,7 +574,7 @@ async def thumbnail_menu(client: Client, callback_query: CallbackQuery):
 @Client.on_callback_query(filters.regex("^u_set_thumb$"))
 async def set_thumb_prompt(client: Client, callback_query: CallbackQuery):
     edit_states[callback_query.from_user.id] = "waiting_for_thumb"
-    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴘɪᴄᴛᴜʀᴇ.\n\n/cancel - ᴄᴀɴᴄᴇʟ."
+    text = "sᴇɴᴅ ᴍᴇ ᴀ ᴘɪᴄᴛᴜʀᴇ.\n\n/cancel"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_thumbnail")]]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -632,17 +583,10 @@ async def set_thumb_prompt(client: Client, callback_query: CallbackQuery):
 async def view_thumb(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     thumb = await db.get_custom_thumbnail(bot_username)
-
     if not thumb:
         return await callback_query.answer("⚠️ No thumbnail set.", show_alert=True)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_thumbnail")]]
-    await client.send_photo(
-        callback_query.message.chat.id,
-        photo=thumb,
-        caption="🖼️ **Current Thumbnail**",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+    await client.send_photo(callback_query.message.chat.id, photo=thumb, caption="🖼️ Current Thumbnail", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_callback_query(filters.regex("^u_remove_thumb$"))
@@ -652,49 +596,33 @@ async def remove_thumb(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("✅ Thumbnail removed.", show_alert=True)
     await thumbnail_menu(client, callback_query)
 
+
 # ==========================================================
-# 🔹 RECEIVE CAPTION
+# 🔹 INPUT HANDLERS
 # ==========================================================
-@Client.on_message(
-    filters.private & filters.text & ~filters.command(["cancel", "start"]),
-    group=95
-)
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=95)
 async def receive_caption(client: Client, message: Message):
     user_id = message.from_user.id
     if edit_states.get(user_id) != "waiting_for_caption":
         return
-
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
     await db.set_custom_caption(bot_username, message.text)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_caption")]]
     await message.reply_text("✅ Caption saved.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE BUTTONS
-# ==========================================================
-@Client.on_message(
-    filters.private & filters.text & ~filters.command(["cancel", "start"]),
-    group=96
-)
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=96)
 async def receive_buttons(client: Client, message: Message):
     user_id = message.from_user.id
     if edit_states.get(user_id) != "waiting_for_buttons":
         return
-
     edit_states.pop(user_id, None)
     text = message.text.strip()
-
     pattern = r"\[([^\]]+)\]\[buttonurl:([^\]]+)\]"
     matches = re.findall(pattern, text)
-
     if not matches:
-        return await message.reply_text(
-            "❌ Invalid format. Use: [Button Text][buttonurl:https://link.com]"
-        )
-
+        return await message.reply_text("❌ Invalid format. Use: [Button Text][buttonurl:https://link.com]")
     parsed_rows = []
     current_row = []
     for btn_text, url in matches:
@@ -704,58 +632,39 @@ async def receive_buttons(client: Client, message: Message):
             current_row = []
     if current_row:
         parsed_rows.append(current_row)
-
     bot_username = (await client.get_me()).username
     await db.set_custom_buttons(bot_username, parsed_rows)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_button")]]
     await message.reply_text("✅ Buttons saved.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE AUTO DELETE TIME
-# ==========================================================
-@Client.on_message(
-    filters.private & filters.text & ~filters.command(["cancel", "start"]),
-    group=97
-)
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=97)
 async def receive_autodel_time(client: Client, message: Message):
     user_id = message.from_user.id
     if edit_states.get(user_id) != "waiting_for_autodel_time":
         return
-
     text = message.text.strip().lower()
     if not (text.endswith("m") or text.endswith("h")):
         return await message.reply_text("❌ Invalid format. Use 15m or 1h.")
-
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
     await db.set_auto_delete_time(bot_username, text)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_auto_delete")]]
     await message.reply_text(f"✅ Time set to {text}", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE THUMBNAIL
-# ==========================================================
 @Client.on_message(filters.private & filters.photo, group=98)
 async def receive_thumb(client: Client, message: Message):
     user_id = message.from_user.id
     if edit_states.get(user_id) != "waiting_for_thumb":
         return
-
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
     await db.set_custom_thumbnail(bot_username, message.photo.file_id)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_thumbnail")]]
     await message.reply_text("✅ Thumbnail saved.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE LOG CHANNEL
-# ==========================================================
 @Client.on_message(filters.private, group=21)
 async def receive_log_channel(client: Client, message: Message):
     user_id = message.from_user.id
@@ -767,13 +676,7 @@ async def receive_log_channel(client: Client, message: Message):
     if not message.forward_from_chat:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
         return await message.reply_text("⚠️ Forward a message from the channel.", reply_markup=InlineKeyboardMarkup(buttons))
-
     chat = message.forward_from_chat
-    chat_type = str(chat.type).lower().replace("chattype.", "")
-    if chat_type not in ("channel", "supergroup"):
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-        return await message.reply_text("⚠️ Only channels/supergroups allowed.", reply_markup=InlineKeyboardMarkup(buttons))
-
     bot_username = (await client.get_me()).username
     try:
         me = await client.get_me()
@@ -781,23 +684,18 @@ async def receive_log_channel(client: Client, message: Message):
         status_str = str(member.status).split(".")[-1].lower()
         if status_str not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
-            return await message.reply_text(f"⚠️ **Bot is not admin**\n\nChannel: {chat.title}\nStatus: `{status_str}`", reply_markup=InlineKeyboardMarkup(buttons))
+            return await message.reply_text(f"⚠️ Bot is not admin in **{chat.title}**", reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
         return await message.reply_text(f"⚠️ Error: `{type(e).__name__}: {e}`", reply_markup=InlineKeyboardMarkup(buttons))
-
     edit_states.pop(user_id, None)
     clone_data = await db.get_clone_by_username(bot_username)
     if clone_data:
         await db.update_clone_setting(clone_data["user_id"], "log_channel", chat.id)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_log_channel")]]
     await message.reply_text(f"✅ **Log Channel Set:** {chat.title}", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE DB CHANNEL
-# ==========================================================
 @Client.on_message(filters.private, group=22)
 async def receive_db_channel(client: Client, message: Message):
     user_id = message.from_user.id
@@ -809,13 +707,7 @@ async def receive_db_channel(client: Client, message: Message):
     if not message.forward_from_chat:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
         return await message.reply_text("⚠️ Forward a message from the channel.", reply_markup=InlineKeyboardMarkup(buttons))
-
     chat = message.forward_from_chat
-    chat_type = str(chat.type).lower().replace("chattype.", "")
-    if chat_type not in ("channel", "supergroup"):
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-        return await message.reply_text("⚠️ Only channels/supergroups allowed.", reply_markup=InlineKeyboardMarkup(buttons))
-
     bot_username = (await client.get_me()).username
     try:
         me = await client.get_me()
@@ -823,23 +715,18 @@ async def receive_db_channel(client: Client, message: Message):
         status_str = str(member.status).split(".")[-1].lower()
         if status_str not in ("administrator", "creator", "owner"):
             buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
-            return await message.reply_text(f"⚠️ **Bot is not admin**\n\nChannel: {chat.title}\nStatus: `{status_str}`", reply_markup=InlineKeyboardMarkup(buttons))
+            return await message.reply_text(f"⚠️ Bot is not admin in **{chat.title}**", reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
         return await message.reply_text(f"⚠️ Error: `{type(e).__name__}: {e}`", reply_markup=InlineKeyboardMarkup(buttons))
-
     edit_states.pop(user_id, None)
     clone_data = await db.get_clone_by_username(bot_username)
     if clone_data:
         await db.update_clone_setting(clone_data["user_id"], "db_channel", chat.id)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_db_channel")]]
     await message.reply_text(f"✅ **DB Channel Set:** {chat.title}", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 RECEIVE ADMINS
-# ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=23)
 async def receive_add_admin(client: Client, message: Message):
     user_id = message.from_user.id
@@ -850,7 +737,6 @@ async def receive_add_admin(client: Client, message: Message):
     except ValueError:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
         return await message.reply_text("❌ Invalid ID.", reply_markup=InlineKeyboardMarkup(buttons))
-
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
@@ -859,7 +745,6 @@ async def receive_add_admin(client: Client, message: Message):
         if new_admin not in admins:
             admins.append(new_admin)
             await db.update_clone_setting(clone_data["user_id"], "admins", admins)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
     await message.reply_text(f"✅ Admin `{new_admin}` added.", reply_markup=InlineKeyboardMarkup(buttons))
 
@@ -874,7 +759,6 @@ async def receive_remove_admin(client: Client, message: Message):
     except ValueError:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
         return await message.reply_text("❌ Invalid ID.", reply_markup=InlineKeyboardMarkup(buttons))
-
     edit_states.pop(user_id, None)
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
@@ -883,14 +767,10 @@ async def receive_remove_admin(client: Client, message: Message):
         if rem_admin in admins:
             admins.remove(rem_admin)
             await db.update_clone_setting(clone_data["user_id"], "admins", admins)
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_admins")]]
     await message.reply_text(f"✅ Admin `{rem_admin}` removed.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 CANCEL
-# ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private, group=25)
 async def cancel_clone_edit(client: Client, message: Message):
     user_id = message.from_user.id
@@ -907,7 +787,6 @@ async def admins_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     admins = clone_data.get("admins", []) if clone_data else []
-
     text = f"👥 **ADMINS:**\n\n**Total Admins:** {len(admins)}"
     buttons = [
         [InlineKeyboardButton("Add Admin", callback_data="c_add_admin"),
@@ -931,9 +810,6 @@ async def remove_admin_prompt(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text("👥 Send user ID to remove.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 BOT STATUS
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_status$"))
 async def bot_status(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
@@ -943,7 +819,6 @@ async def bot_status(client: Client, callback_query: CallbackQuery):
     ram = psutil.virtual_memory().percent
     up = int(time.time() - BOT_START_TIME)
     h, m, s = up // 3600, (up % 3600) // 60, up % 60
-
     text = (
         f"**{bot_username.upper()}**\n\n"
         f"USERS - {total_users}\n\n"
@@ -956,16 +831,12 @@ async def bot_status(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 BOT MODE
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_bot_mode$"))
 async def bot_mode_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     current = clone_data.get("bot_mode", "public") if clone_data else "public"
     icon = "🌐" if current == "public" else "🔒"
-
     text = f"🛍️ **BOT MODE**\n\n{icon} Current: {current.title()}"
     buttons = [
         [InlineKeyboardButton("🌐 Public", callback_data="c_mode_public"),
@@ -986,9 +857,6 @@ async def set_bot_mode(client: Client, callback_query: CallbackQuery):
     await bot_mode_menu(client, callback_query)
 
 
-# ==========================================================
-# 🔹 RESTART BOT
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_restart$"))
 async def restart_bot(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("⏱️ Restarting...", show_alert=True)
@@ -1006,9 +874,6 @@ async def _delayed_restart(client: Client):
         print(f"⚠️ Restart error: {e}")
 
 
-# ==========================================================
-# 🔹 DELETE BOT
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_delete_bot$"))
 async def delete_bot_prompt(client: Client, callback_query: CallbackQuery):
     text = "🚫 **DELETE BOT**\n\nAre you sure?"
@@ -1028,9 +893,6 @@ async def confirm_delete_bot(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text("✅ Bot deleted.")
 
 
-# ==========================================================
-# 🔹 MORE FEATURES
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_more_features$"))
 async def more_features(client: Client, callback_query: CallbackQuery):
     text = "🔍 **MORE FEATURES**\n\n• /settings\n• /customize\n• /broadcast\n• /ban\n• /unban\n• /myplan\n• /link\n• /batch"
@@ -1038,32 +900,24 @@ async def more_features(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 BACK
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_back$"))
 async def clone_back_cb(client: Client, callback_query: CallbackQuery):
     from pyrogram.errors import MessageNotModified
     bot_username = (await client.get_me()).username
     bot_mention = f"@{bot_username}"
     user_mention = callback_query.from_user.mention
-
     clone_data = await db.get_clone_by_username(bot_username)
     start_text = clone_data.get("start_text") if clone_data else None
     start_buttons = clone_data.get("start_buttons", []) if clone_data else []
-
     if not start_text:
         start_text = "ʜᴇʏ {mention} 👋,\n\nᴍʏ ɴᴀᴍᴇ ɪs {bot_mention}\n\nɪ ᴀᴍ ᴀ ᴘᴇʀᴍᴀɴᴀɴᴛ ғɪʟᴇ sᴛᴏʀᴇ ʙᴏᴛ."
-
     try:
         formatted = start_text.format(mention=user_mention, bot_mention=bot_mention)
     except Exception:
         formatted = start_text
-
     keyboard = []
     for btn in start_buttons:
         keyboard.append([InlineKeyboardButton(btn["text"], url=btn["url"])])
-
     if not keyboard:
         keyboard = [
             [InlineKeyboardButton("Help", callback_data="c_help"),
@@ -1073,25 +927,19 @@ async def clone_back_cb(client: Client, callback_query: CallbackQuery):
             [InlineKeyboardButton("Update", url="https://t.me/YourChannel"),
              InlineKeyboardButton("Support", url="https://t.me/YourSupport")]
         ]
-
     try:
         await callback_query.message.edit_text(formatted, reply_markup=InlineKeyboardMarkup(keyboard))
     except MessageNotModified:
         pass
 
 
-# ==========================================================
-# 🔹 PLAN
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_plan$"))
 async def c_plan_callback(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     plan_text = await db.get_premium_plan_text(bot_username)
-
     if not plan_text:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         return await callback_query.message.edit_text("❌ **Plan Not Available**", reply_markup=InlineKeyboardMarkup(buttons))
-
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
     await callback_query.message.edit_text(f"💎 **PREMIUM PLAN**\n\n{plan_text}", reply_markup=InlineKeyboardMarkup(buttons), disable_web_page_preview=True)
 
@@ -1101,12 +949,7 @@ async def c_myplan_callback(client: Client, callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     bot_username = (await client.get_me()).username
     is_premium = await db.is_premium_user(user_id, bot_username)
-
-    if is_premium:
-        text = "💎 **My Premium Status**\n\n✅ **Status:** Premium (Active)"
-    else:
-        text = "💎 **My Premium Status**\n\n📌 **Status:** Free\n🆓 Limit: 5 files/day"
-
+    text = "💎 **My Premium Status**\n\n✅ Premium (Active)" if is_premium else "💎 **My Premium Status**\n\n📌 Free\n🆓 Limit: 5 files/day"
     buttons = [
         [InlineKeyboardButton("💎 View Plans", callback_data="c_plan")],
         [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
@@ -1114,9 +957,6 @@ async def c_myplan_callback(client: Client, callback_query: CallbackQuery):
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 
-# ==========================================================
-# 🔹 VERIFY CALLBACK
-# ==========================================================
 @Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
 async def handle_verify_callback(client: Client, message: Message):
     user_id = int(message.matches[0].group(1))
@@ -1126,15 +966,11 @@ async def handle_verify_callback(client: Client, message: Message):
     await message.reply_text("✅ **Verification Complete!**")
 
 
-# ==========================================================
-# 🔹 FSUB CHECK
-# ==========================================================
 @Client.on_callback_query(filters.regex("^fsub_check$"))
 async def fsub_check(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     from utils.fsub_helper import check_subscription
     not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
-
     if not not_joined:
         await callback_query.answer("✅ Verified!", show_alert=True)
         try:
@@ -1146,9 +982,6 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
         await callback_query.answer("⚠️ You haven't joined all channels yet.", show_alert=True)
 
 
-# ==========================================================
-# 🔹 OTHER SETTINGS ALERTS
-# ==========================================================
 @Client.on_callback_query(filters.regex("^u_(free_limit|refer|permanent_link|protect_content)$"))
 async def user_setting_handler(client: Client, callback_query: CallbackQuery):
     key = callback_query.data.replace("u_", "")
@@ -1161,9 +994,6 @@ async def user_setting_handler(client: Client, callback_query: CallbackQuery):
     await callback_query.answer(messages.get(key, "Coming soon"), show_alert=True)
 
 
-# ==========================================================
-# 🔹 /broadcast
-# ==========================================================
 @Client.on_message(filters.command("broadcast") & filters.private)
 async def clone_broadcast(client: Client, message: Message):
     user_id = message.from_user.id
@@ -1173,7 +1003,6 @@ async def clone_broadcast(client: Client, message: Message):
         return await message.reply_text("❌ Owner only.")
     if not message.reply_to_message:
         return await message.reply_text("⚠️ Reply to a message.")
-
     users = await db.get_all_users()
     status = await message.reply_text(f"📢 Broadcasting to {len(users)} users...")
     success = 0
@@ -1187,9 +1016,6 @@ async def clone_broadcast(client: Client, message: Message):
     await status.edit_text(f"✅ Sent to {success}/{len(users)} users.")
 
 
-# ==========================================================
-# 🔹 /ban and /unban
-# ==========================================================
 @Client.on_message(filters.command("ban") & filters.private)
 async def clone_ban(client: Client, message: Message):
     user_id = message.from_user.id
