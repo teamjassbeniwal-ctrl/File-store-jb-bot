@@ -14,24 +14,29 @@ user_states = {}
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER
+# 🔹 AUTO DELETE HELPER (with alert first, then delete)
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
-        # Send alert
+        bot_username = (await client.get_me()).username
+        adtext = await db.get_setting(f"adtext_{bot_username}") or "⚠️ **This file has been auto-deleted** due to copyright protection."
+        adpic = await db.get_setting(f"adpic_{bot_username}")
+
+        # Send alert FIRST
         try:
-            alert = await message.reply_text(
-                "⚠️ **This file has been auto-deleted** due to copyright protection."
-            )
-            await asyncio.sleep(10)
-            await alert.delete()
-        except Exception:
-            pass
-        # Delete file
+            if adpic:
+                await message.reply_photo(photo=adpic, caption=adtext)
+            else:
+                await message.reply_text(adtext)
+            print("✅ Alert sent.")
+        except Exception as e:
+            print(f"Alert send failed: {e}")
+
+        # Delete original file
         await message.delete()
-        print("✅ Auto-delete: file deleted.")
+        print("✅ File deleted.")
     except Exception as e:
         print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
@@ -72,7 +77,7 @@ async def clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE FOR /link (with proper thumbnail)
+# 🔹 HANDLE SINGLE FILE (with proper thumbnail, caption, buttons)
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -173,12 +178,17 @@ async def handle_clone_link(client: Client, message: Message):
         if short:
             final_link = short
 
-    # Get custom settings
+    # ==========================================================
+    # 🔹 GET CUSTOM SETTINGS
+    # ==========================================================
     caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
     buttons_data = await db.get_custom_buttons(bot_username)
     thumb = await db.get_custom_thumbnail(bot_username)
     autodel_status = await db.get_auto_delete_status(bot_username)
     autodel_time = await db.get_auto_delete_time(bot_username)
+
+    # Debug
+    print(f"DEBUG: media_type={media_type}, thumb={thumb is not None}, caption={caption[:30]}, autodel={autodel_status}")
 
     # Replace caption placeholders
     if message.document:
@@ -206,7 +216,7 @@ async def handle_clone_link(client: Client, message: Message):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # ==========================================================
-    # 🔹 SEND WITH PROPER METHOD (thumbnail support)
+    # 🔹 SEND WITH PROPER METHOD
     # ==========================================================
     try:
         sent = None
@@ -275,7 +285,7 @@ async def handle_clone_link(client: Client, message: Message):
             pass
 
         # ==========================================================
-        # 🔹 AUTO DELETE — schedule
+        # 🔹 AUTO DELETE
         # ==========================================================
         if autodel_status and sent:
             try:
@@ -288,7 +298,7 @@ async def handle_clone_link(client: Client, message: Message):
                     seconds = int(time_str[:-1])
                 else:
                     seconds = 60
-                print(f"⏱️ Scheduling auto-delete in {seconds}s for user {user_id}")
+                print(f"⏱️ Scheduling auto-delete in {seconds}s")
                 asyncio.create_task(_auto_delete_file(client, sent, seconds))
             except Exception as e:
                 print(f"⚠️ Auto-delete scheduling error: {e}")
@@ -301,7 +311,7 @@ async def handle_clone_link(client: Client, message: Message):
                 [InlineKeyboardButton("🔗 Open Link", url=final_link)],
                 [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
             ])
-            )
+        )
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
@@ -447,4 +457,3 @@ async def clone_cancel(client: Client, message: Message):
         user_states.pop(user_id, None)
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
-        
