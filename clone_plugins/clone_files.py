@@ -13,6 +13,9 @@ import time
 user_states = {}
 
 
+# ==========================================================
+# 🔹 /link
+# ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def clone_link(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -27,6 +30,9 @@ async def clone_link(client: Client, message: Message):
     )
 
 
+# ==========================================================
+# 🔹 /batch
+# ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def clone_batch(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -42,6 +48,20 @@ async def clone_batch(client: Client, message: Message):
     )
 
 
+# ==========================================================
+# 🔹 AUTO DELETE HELPER
+# ==========================================================
+async def _auto_delete_file(client: Client, message, seconds: int):
+    await asyncio.sleep(seconds)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+# ==========================================================
+# 🔹 HANDLE SINGLE FILE FOR /link
+# ==========================================================
 @Client.on_message(
     filters.private &
     (filters.document | filters.video | filters.photo | filters.audio |
@@ -94,22 +114,32 @@ async def handle_clone_link(client: Client, message: Message):
 
     # File processing
     file_id = None
+    media_type = None
+
     if message.document:
         file_id = message.document.file_id
+        media_type = "document"
     elif message.video:
         file_id = message.video.file_id
+        media_type = "video"
     elif message.photo:
         file_id = message.photo.file_id
+        media_type = "photo"
     elif message.audio:
         file_id = message.audio.file_id
+        media_type = "audio"
     elif message.voice:
         file_id = message.voice.file_id
+        media_type = "voice"
     elif message.video_note:
         file_id = message.video_note.file_id
+        media_type = "video_note"
     elif message.animation:
         file_id = message.animation.file_id
+        media_type = "animation"
     elif message.text:
         file_id = f"text:{message.text}"
+        media_type = "text"
 
     if not file_id:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
@@ -131,10 +161,12 @@ async def handle_clone_link(client: Client, message: Message):
         if short:
             final_link = short
 
-    # ==========================================================
-    # 🔹 APPLY CUSTOM SETTINGS
-    # ==========================================================
+    # Get custom settings
     caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
+    buttons_data = await db.get_custom_buttons(bot_username)
+    thumb = await db.get_custom_thumbnail(bot_username)
+    autodel_status = await db.get_auto_delete_status(bot_username)
+    autodel_time = await db.get_auto_delete_time(bot_username)
 
     # Replace placeholders
     if message.document:
@@ -145,8 +177,10 @@ async def handle_clone_link(client: Client, message: Message):
         caption = caption.replace("{file_name}", message.video.file_name or "video")
         if message.video.file_size:
             caption = caption.replace("{file_size}", f"{round(message.video.file_size / 1024 / 1024, 2)} MB")
+    elif message.audio:
+        caption = caption.replace("{file_name}", message.audio.file_name or "audio")
 
-    buttons_data = await db.get_custom_buttons(bot_username)
+    # Build keyboard
     keyboard = []
     for row in buttons_data:
         kb_row = []
@@ -157,27 +191,85 @@ async def handle_clone_link(client: Client, message: Message):
     keyboard.append([InlineKeyboardButton("🔗 Open Link", url=final_link)])
     keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="c_back")])
 
-    thumb = await db.get_custom_thumbnail(bot_username)
-    autodel_status = await db.get_auto_delete_status(bot_username)
-    autodel_time = await db.get_auto_delete_time(bot_username)
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
+    # ==========================================================
+    # 🔹 SEND WITH PROPER METHOD (thumbnail support)
+    # ==========================================================
     try:
-        sent = await message.reply_cached_media(
-            file_id,
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            thumb=thumb
-        )
+        sent = None
+
+        if media_type == "video":
+            sent = await client.send_video(
+                chat_id=message.chat.id,
+                video=file_id,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+        elif media_type == "document":
+            sent = await client.send_document(
+                chat_id=message.chat.id,
+                document=file_id,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+        elif media_type == "audio":
+            sent = await client.send_audio(
+                chat_id=message.chat.id,
+                audio=file_id,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+        elif media_type == "animation":
+            sent = await client.send_animation(
+                chat_id=message.chat.id,
+                animation=file_id,
+                caption=caption,
+                reply_markup=reply_markup
+            )
+        elif media_type == "photo":
+            sent = await client.send_photo(
+                chat_id=message.chat.id,
+                photo=file_id,
+                caption=caption,
+                reply_markup=reply_markup
+            )
+        elif media_type == "voice":
+            sent = await client.send_voice(
+                chat_id=message.chat.id,
+                voice=file_id,
+                caption=caption,
+                reply_markup=reply_markup
+            )
+        elif media_type == "video_note":
+            sent = await client.send_video_note(
+                chat_id=message.chat.id,
+                video_note=file_id
+            )
+        elif media_type == "text":
+            sent = await client.send_message(
+                chat_id=message.chat.id,
+                text=message.text,
+                reply_markup=reply_markup
+            )
+
+        # Delete original message
         try:
             await message.delete()
         except Exception:
             pass
 
+        # Auto delete
         if autodel_status and sent:
             seconds = int(autodel_time[:-1]) * (60 if autodel_time.endswith("m") else 3600)
             asyncio.create_task(_auto_delete_file(client, sent, seconds))
+
     except Exception as e:
-        print(f"File send error: {e}")
+        print(f"File send error: {type(e).__name__}: {e}")
+        # Fallback
         await message.reply_text(
             f"✅ **File Stored!**\n\n🔗 **Link:**\n`{final_link}`",
             reply_markup=InlineKeyboardMarkup([
@@ -185,14 +277,6 @@ async def handle_clone_link(client: Client, message: Message):
                 [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
             ])
         )
-
-
-async def _auto_delete_file(client: Client, message, seconds: int):
-    await asyncio.sleep(seconds)
-    try:
-        await message.delete()
-    except Exception:
-        pass
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
