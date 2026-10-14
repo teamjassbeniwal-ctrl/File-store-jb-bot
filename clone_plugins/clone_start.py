@@ -16,11 +16,21 @@ BOT_START_TIME = time.time()
 # 🔹 AUTO DELETE HELPER
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
+    print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
+        try:
+            alert = await message.reply_text(
+                "⚠️ **This file has been auto-deleted** due to copyright protection."
+            )
+            await asyncio.sleep(10)
+            await alert.delete()
+        except Exception:
+            pass
         await message.delete()
-    except Exception:
-        pass
+        print("✅ Auto-delete: file deleted.")
+    except Exception as e:
+        print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
 
 # ==========================================================
@@ -64,7 +74,7 @@ async def clone_start(client: Client, message: Message):
                     await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
                 return
 
-    # Deep link handler — with custom settings
+    # Deep link handler — with custom settings + auto delete
     if message.text and " " in message.text:
         parts = message.text.split(maxsplit=1)
         if len(parts) > 1:
@@ -122,9 +132,22 @@ async def clone_start(client: Client, message: Message):
                                 caption=caption,
                                 reply_markup=reply_markup
                             )
+                            # Auto delete schedule
                             if autodel_status and sent:
-                                seconds = int(autodel_time[:-1]) * (60 if autodel_time.endswith("m") else 3600)
-                                asyncio.create_task(_auto_delete_file(client, sent, seconds))
+                                try:
+                                    time_str = autodel_time.strip().lower()
+                                    if time_str.endswith("m"):
+                                        seconds = int(time_str[:-1]) * 60
+                                    elif time_str.endswith("h"):
+                                        seconds = int(time_str[:-1]) * 3600
+                                    elif time_str.endswith("s"):
+                                        seconds = int(time_str[:-1])
+                                    else:
+                                        seconds = 60
+                                    print(f"⏱️ Scheduling auto-delete in {seconds}s (deep link)")
+                                    asyncio.create_task(_auto_delete_file(client, sent, seconds))
+                                except Exception as e:
+                                    print(f"⚠️ Auto-delete error: {e}")
                         except Exception as e:
                             print(f"File delivery error: {type(e).__name__}: {e}")
                             await message.reply_cached_media(fid, caption=caption)
@@ -324,7 +347,6 @@ async def send_clone_settings(message, edit=False):
     else:
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-
 # ==========================================================
 # 🔹 LOG CHANNEL
 # ==========================================================
@@ -333,10 +355,8 @@ async def log_channel_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     log_channel = clone_data.get("log_channel") if clone_data else None
-
     text = "📢 **LOG CHANNEL:**\n\n"
     text += f"✅ **Current:** `{log_channel}`" if log_channel else "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ʟᴏɢ ᴄʜᴀɴɴᴇʟ❗️"
-
     buttons = [
         [InlineKeyboardButton("Set Log Channel", callback_data="c_set_log")],
         [InlineKeyboardButton("Delete Channel", callback_data="c_delete_log")],
@@ -372,10 +392,8 @@ async def db_channel_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
     clone_data = await db.get_clone_by_username(bot_username)
     db_channel = clone_data.get("db_channel") if clone_data else None
-
     text = "☁️ **DATABASE CHANNEL:**\n\n"
     text += f"✅ **Current:** `{db_channel}`" if db_channel else "ʏᴏᴜ ᴅɪᴅɴ'ᴛ ᴀᴅᴅᴇᴅ ᴀɴʏ ᴅᴀᴛᴀʙᴀsᴇ ᴄʜᴀɴɴᴇʟ❗️"
-
     buttons = [
         [InlineKeyboardButton("Set Database Channel", callback_data="c_set_db")],
         [InlineKeyboardButton("Delete Channel", callback_data="c_delete_db")],
@@ -401,6 +419,7 @@ async def delete_db_channel(client: Client, callback_query: CallbackQuery):
         await db.update_clone_setting(clone_data["user_id"], "db_channel", None)
     await callback_query.answer("✅ Deleted.", show_alert=True)
     await db_channel_menu(client, callback_query)
+
 
 # ==========================================================
 # 🔹 CAPTION
@@ -596,10 +615,6 @@ async def remove_thumb(client: Client, callback_query: CallbackQuery):
     await callback_query.answer("✅ Thumbnail removed.", show_alert=True)
     await thumbnail_menu(client, callback_query)
 
-
-# ==========================================================
-# 🔹 INPUT HANDLERS
-# ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=95)
 async def receive_caption(client: Client, message: Message):
     user_id = message.from_user.id
@@ -779,9 +794,6 @@ async def cancel_clone_edit(client: Client, message: Message):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
 
-# ==========================================================
-# 🔹 ADMINS MENU
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_admins$"))
 async def admins_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
