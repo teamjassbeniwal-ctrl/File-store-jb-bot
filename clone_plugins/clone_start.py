@@ -61,7 +61,6 @@ async def clone_start(client: Client, message: Message):
         except Exception as e:
             print(f"Log channel error: {e}")
 
-    # Force Sub gate
     is_deep_link = message.text and " " in message.text
     if not is_deep_link:
         fsub_status = await db.get_fsub_status(bot_username)
@@ -113,7 +112,6 @@ async def clone_start(client: Client, message: Message):
                     if fid.startswith("text:"):
                         await message.reply_text(fid.replace("text:", ""))
                     else:
-                        # Get custom settings
                         caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
                         buttons_data = await db.get_custom_buttons(bot_username)
                         thumb = await db.get_custom_thumbnail(bot_username)
@@ -200,9 +198,6 @@ async def clone_start(client: Client, message: Message):
     else:
         await message.reply_text(formatted_text, reply_markup=reply_markup)
 
-# ==========================================================
-# 🔹 /help
-# ==========================================================
 @Client.on_message(filters.command("help") & filters.private)
 async def clone_help_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -259,7 +254,6 @@ async def clone_id_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-
     user = message.from_user
     text = (
         "User Details :\n\n\n"
@@ -316,11 +310,9 @@ async def customize_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
     if not await check_force_sub(client, message, bot_username):
         return
-
     clone_data = await db.get_clone_by_username(bot_username)
     if not clone_data or clone_data["user_id"] != message.from_user.id:
         return await message.reply_text("⚠️ Only the bot owner can use this command.")
-
     await send_clone_settings(message)
 
 
@@ -350,9 +342,6 @@ async def send_clone_settings(message, edit=False):
     else:
         await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-# ==========================================================
-# 🔹 LOG CHANNEL
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
@@ -387,9 +376,6 @@ async def delete_log_channel(client: Client, callback_query: CallbackQuery):
     await log_channel_menu(client, callback_query)
 
 
-# ==========================================================
-# 🔹 DATABASE CHANNEL
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_db_channel$"))
 async def db_channel_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
@@ -857,6 +843,10 @@ async def cancel_clone_edit(client: Client, message: Message):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
 
+
+# ==========================================================
+# 🔹 ADMINS / STATUS / MODE / RESTART / DELETE / BACK / PLAN / VERIFY
+# ==========================================================
 @Client.on_callback_query(filters.regex("^c_admins$"))
 async def admins_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
@@ -1047,79 +1037,4 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
     from utils.fsub_helper import check_subscription
     not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
     if not not_joined:
-        await callback_query.answer("✅ Verified!", show_alert=True)
-        try:
-            await callback_query.message.delete()
-        except Exception:
-            pass
-        await callback_query.message.reply_text("✅ **Verification Complete!**")
-    else:
-        await callback_query.answer("⚠️ You haven't joined all channels yet.", show_alert=True)
-
-
-@Client.on_callback_query(filters.regex("^u_(free_limit|refer|permanent_link|protect_content)$"))
-async def user_setting_handler(client: Client, callback_query: CallbackQuery):
-    key = callback_query.data.replace("u_", "")
-    messages = {
-        "free_limit": "🆓 Free usage: 5 files per day.",
-        "refer": "🌍 Refer & Earn: Coming soon!",
-        "permanent_link": "♾️ Permanent Link: Toggle.",
-        "protect_content": "🔒 Protect Content: Toggle."
-    }
-    await callback_query.answer(messages.get(key, "Coming soon"), show_alert=True)
-
-
-@Client.on_message(filters.command("broadcast") & filters.private)
-async def clone_broadcast(client: Client, message: Message):
-    user_id = message.from_user.id
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-    if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ Owner only.")
-    if not message.reply_to_message:
-        return await message.reply_text("⚠️ Reply to a message.")
-    users = await db.get_all_users()
-    status = await message.reply_text(f"📢 Broadcasting to {len(users)} users...")
-    success = 0
-    for u in users:
-        try:
-            await message.reply_to_message.copy(u["user_id"])
-            success += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            pass
-    await status.edit_text(f"✅ Sent to {success}/{len(users)} users.")
-
-
-@Client.on_message(filters.command("ban") & filters.private)
-async def clone_ban(client: Client, message: Message):
-    user_id = message.from_user.id
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-    if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ Owner only.")
-    if len(message.command) < 2:
-        return await message.reply_text("⚠️ Usage: /ban [user_id]")
-    try:
-        target = int(message.command[1])
-    except ValueError:
-        return await message.reply_text("❌ Invalid ID.")
-    await db.ban_user(target)
-    await message.reply_text(f"✅ User {target} banned.")
-
-
-@Client.on_message(filters.command("unban") & filters.private)
-async def clone_unban(client: Client, message: Message):
-    user_id = message.from_user.id
-    bot_username = (await client.get_me()).username
-    clone_data = await db.get_clone_by_username(bot_username)
-    if not clone_data or clone_data["user_id"] != user_id:
-        return await message.reply_text("❌ Owner only.")
-    if len(message.command) < 2:
-        return await message.reply_text("⚠️ Usage: /unban [user_id]")
-    try:
-        target = int(message.command[1])
-    except ValueError:
-        return await message.reply_text("❌ Invalid ID.")
-    await db.unban_user(target)
-    await message.reply_text(f"✅ User {target} unbanned.")
+        await callback_query.answer("✅ Verified!", show_alert
