@@ -1037,4 +1037,4 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
     from utils.fsub_helper import check_subscription
     not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
     if not not_joined:
-        await callback_query.answer("✅ Verified!", show_alert
+        await callback_query.answer("✅ Verified!", show_alert)
