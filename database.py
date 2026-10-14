@@ -786,9 +786,130 @@ class Database:
         )
         return r["value"] if r else []
 
+    # ==========================================================
+    # CUSTOM CAPTION
+    # ==========================================================
+
+    async def set_custom_caption(self, bot_key, caption):
+        await self.settings.update_one(
+            {"key": f"caption_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"caption_{bot_key}",
+                    "value": caption
+                }
+            },
+            upsert=True
+        )
+
+    async def get_custom_caption(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"caption_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    async def delete_custom_caption(self, bot_key):
+        await self.settings.delete_one(
+            {"key": f"caption_{bot_key}"}
+        )
+
+    # ==========================================================
+    # CUSTOM BUTTONS
+    # ==========================================================
+
+    async def set_custom_buttons(self, bot_key, buttons):
+        await self.settings.update_one(
+            {"key": f"buttons_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"buttons_{bot_key}",
+                    "value": buttons
+                }
+            },
+            upsert=True
+        )
+
+    async def get_custom_buttons(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"buttons_{bot_key}"}
+        )
+        return r["value"] if r else []
+
+    async def delete_custom_buttons(self, bot_key):
+        await self.settings.delete_one(
+            {"key": f"buttons_{bot_key}"}
+        )
+
+    # ==========================================================
+    # AUTO DELETE
+    # ==========================================================
+
+    async def set_auto_delete_status(self, bot_key, status: bool):
+        await self.settings.update_one(
+            {"key": f"autodel_status_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"autodel_status_{bot_key}",
+                    "value": status
+                }
+            },
+            upsert=True
+        )
+
+    async def get_auto_delete_status(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"autodel_status_{bot_key}"}
+        )
+        return r["value"] if r else False
+
+    async def set_auto_delete_time(self, bot_key, time_str):
+        await self.settings.update_one(
+            {"key": f"autodel_time_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"autodel_time_{bot_key}",
+                    "value": time_str
+                }
+            },
+            upsert=True
+        )
+
+    async def get_auto_delete_time(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"autodel_time_{bot_key}"}
+        )
+        return r["value"] if r else "30m"
+
+    # ==========================================================
+    # CUSTOM THUMBNAIL
+    # ==========================================================
+
+    async def set_custom_thumbnail(self, bot_key, file_id):
+        await self.settings.update_one(
+            {"key": f"thumb_{bot_key}"},
+            {
+                "$set": {
+                    "key": f"thumb_{bot_key}",
+                    "value": file_id
+                }
+            },
+            upsert=True
+        )
+
+    async def get_custom_thumbnail(self, bot_key):
+        r = await self.settings.find_one(
+            {"key": f"thumb_{bot_key}"}
+        )
+        return r["value"] if r else None
+
+    async def delete_custom_thumbnail(self, bot_key):
+        await self.settings.delete_one(
+            {"key": f"thumb_{bot_key}"}
+        )
 
 
 # Global database instance
-db = Database()
+db = Database()                                        
+
                     
 
