@@ -14,7 +14,7 @@ user_states = {}
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER (with alert first, then delete)
+# 🔹 AUTO DELETE HELPER — Alert stays, file deleted
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
@@ -24,7 +24,7 @@ async def _auto_delete_file(client: Client, message, seconds: int):
         adtext = await db.get_setting(f"adtext_{bot_username}") or "⚠️ **This file has been auto-deleted** due to copyright protection."
         adpic = await db.get_setting(f"adpic_{bot_username}")
 
-        # Send alert FIRST
+        # Send alert (stays in chat)
         try:
             if adpic:
                 await message.reply_photo(photo=adpic, caption=adtext)
@@ -34,7 +34,7 @@ async def _auto_delete_file(client: Client, message, seconds: int):
         except Exception as e:
             print(f"Alert send failed: {e}")
 
-        # Delete original file
+        # Delete the FILE only (alert stays)
         await message.delete()
         print("✅ File deleted.")
     except Exception as e:
@@ -178,29 +178,31 @@ async def handle_clone_link(client: Client, message: Message):
         if short:
             final_link = short
 
-    # ==========================================================
-    # 🔹 GET CUSTOM SETTINGS
-    # ==========================================================
+    # Get custom settings
     caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
     buttons_data = await db.get_custom_buttons(bot_username)
     thumb = await db.get_custom_thumbnail(bot_username)
     autodel_status = await db.get_auto_delete_status(bot_username)
     autodel_time = await db.get_auto_delete_time(bot_username)
 
-    # Debug
-    print(f"DEBUG: media_type={media_type}, thumb={thumb is not None}, caption={caption[:30]}, autodel={autodel_status}")
+    print(f"DEBUG: media_type={media_type}, thumb={thumb is not None}, caption={caption[:40]}, autodel={autodel_status}")
 
     # Replace caption placeholders
+    file_name = "file"
+    file_size_str = ""
     if message.document:
-        caption = caption.replace("{file_name}", message.document.file_name or "file")
+        file_name = message.document.file_name or "file"
         if message.document.file_size:
-            caption = caption.replace("{file_size}", f"{round(message.document.file_size / 1024 / 1024, 2)} MB")
+            file_size_str = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
     elif message.video:
-        caption = caption.replace("{file_name}", message.video.file_name or "video")
+        file_name = message.video.file_name or "video"
         if message.video.file_size:
-            caption = caption.replace("{file_size}", f"{round(message.video.file_size / 1024 / 1024, 2)} MB")
+            file_size_str = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
     elif message.audio:
-        caption = caption.replace("{file_name}", message.audio.file_name or "audio")
+        file_name = message.audio.file_name or "audio"
+
+    caption = caption.replace("{file_name}", file_name)
+    caption = caption.replace("{file_size}", file_size_str)
 
     # Build keyboard
     keyboard = []
@@ -216,7 +218,7 @@ async def handle_clone_link(client: Client, message: Message):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # ==========================================================
-    # 🔹 SEND WITH PROPER METHOD
+    # 🔹 SEND FILE
     # ==========================================================
     try:
         sent = None
@@ -278,7 +280,6 @@ async def handle_clone_link(client: Client, message: Message):
                 reply_markup=reply_markup
             )
 
-        # Delete original
         try:
             await message.delete()
         except Exception:
@@ -372,7 +373,6 @@ async def handle_clone_batch_count(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
-    # Force Sub gate
     fsub_status = await db.get_fsub_status(bot_username)
     if fsub_status:
         not_joined = await check_subscription(client, user_id, bot_username)
@@ -387,7 +387,6 @@ async def handle_clone_batch_count(client: Client, message: Message):
                 await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
             return
 
-    # Verification gate
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
