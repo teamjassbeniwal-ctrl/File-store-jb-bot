@@ -17,13 +17,23 @@ user_states = {}
 # 🔹 AUTO DELETE HELPER
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
-    print(f"⏱️ Auto-delete scheduled in {seconds}s")
+    print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
+        # Send alert
+        try:
+            alert = await message.reply_text(
+                "⚠️ **This file has been auto-deleted** due to copyright protection."
+            )
+            await asyncio.sleep(10)
+            await alert.delete()
+        except Exception:
+            pass
+        # Delete file
         await message.delete()
-        print("✅ Auto-deleted.")
+        print("✅ Auto-delete: file deleted.")
     except Exception as e:
-        print(f"⚠️ Auto-delete failed: {e}")
+        print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
 
 # ==========================================================
@@ -62,7 +72,7 @@ async def clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE FOR /link
+# 🔹 HANDLE SINGLE FILE FOR /link (with proper thumbnail)
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -265,11 +275,23 @@ async def handle_clone_link(client: Client, message: Message):
             pass
 
         # ==========================================================
-        # 🔹 AUTO DELETE
+        # 🔹 AUTO DELETE — schedule
         # ==========================================================
         if autodel_status and sent:
-            seconds = int(autodel_time[:-1]) * (60 if autodel_time.endswith("m") else 3600)
-            asyncio.create_task(_auto_delete_file(client, sent, seconds))
+            try:
+                time_str = autodel_time.strip().lower()
+                if time_str.endswith("m"):
+                    seconds = int(time_str[:-1]) * 60
+                elif time_str.endswith("h"):
+                    seconds = int(time_str[:-1]) * 3600
+                elif time_str.endswith("s"):
+                    seconds = int(time_str[:-1])
+                else:
+                    seconds = 60
+                print(f"⏱️ Scheduling auto-delete in {seconds}s for user {user_id}")
+                asyncio.create_task(_auto_delete_file(client, sent, seconds))
+            except Exception as e:
+                print(f"⚠️ Auto-delete scheduling error: {e}")
 
     except Exception as e:
         print(f"File send error: {type(e).__name__}: {e}")
@@ -279,7 +301,7 @@ async def handle_clone_link(client: Client, message: Message):
                 [InlineKeyboardButton("🔗 Open Link", url=final_link)],
                 [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
             ])
-    )
+            )
 
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
@@ -425,3 +447,4 @@ async def clone_cancel(client: Client, message: Message):
         user_states.pop(user_id, None)
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
+        
