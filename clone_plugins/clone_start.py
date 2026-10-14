@@ -19,16 +19,21 @@ async def _auto_delete_file(client: Client, message, seconds: int):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
+        bot_username = (await client.get_me()).username
+        adtext = await db.get_setting(f"adtext_{bot_username}") or "⚠️ **This file has been auto-deleted** due to copyright protection."
+        adpic = await db.get_setting(f"adpic_{bot_username}")
+
         try:
-            alert = await message.reply_text(
-                "⚠️ **This file has been auto-deleted** due to copyright protection."
-            )
-            await asyncio.sleep(10)
-            await alert.delete()
-        except Exception:
-            pass
+            if adpic:
+                await message.reply_photo(photo=adpic, caption=adtext)
+            else:
+                await message.reply_text(adtext)
+            print("✅ Alert sent.")
+        except Exception as e:
+            print(f"Alert send failed: {e}")
+
         await message.delete()
-        print("✅ Auto-delete: file deleted.")
+        print("✅ File deleted.")
     except Exception as e:
         print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
@@ -74,7 +79,7 @@ async def clone_start(client: Client, message: Message):
                     await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
                 return
 
-    # Deep link handler — with custom settings + auto delete
+    # Deep link handler
     if message.text and " " in message.text:
         parts = message.text.split(maxsplit=1)
         if len(parts) > 1:
@@ -115,7 +120,6 @@ async def clone_start(client: Client, message: Message):
                         autodel_status = await db.get_auto_delete_status(bot_username)
                         autodel_time = await db.get_auto_delete_time(bot_username)
 
-                        # Build keyboard
                         keyboard = []
                         for row in buttons_data:
                             kb_row = []
@@ -132,7 +136,6 @@ async def clone_start(client: Client, message: Message):
                                 caption=caption,
                                 reply_markup=reply_markup
                             )
-                            # Auto delete schedule
                             if autodel_status and sent:
                                 try:
                                     time_str = autodel_time.strip().lower()
@@ -568,6 +571,42 @@ async def get_again_file(client: Client, callback_query: CallbackQuery):
     await auto_delete_menu(client, callback_query)
 
 
+@Client.on_callback_query(filters.regex("^u_autodel_msg$"))
+async def autodel_msg_menu(client: Client, callback_query: CallbackQuery):
+    text = "📝 **AUTO DELETE MESSAGE:**\n\nᴄᴜsᴛᴏᴍɪsᴇ ʏᴏᴜʀ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ᴍᴇssᴀɢᴇ."
+    buttons = [
+        [InlineKeyboardButton("Auto Delete Text", callback_data="u_adtext")],
+        [InlineKeyboardButton("Auto Delete Pic", callback_data="u_adpic")],
+        [InlineKeyboardButton("Auto Delete Buttons", callback_data="u_adbuttons")],
+        [InlineKeyboardButton("🔙 Back", callback_data="u_auto_delete")]
+    ]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^u_adtext$"))
+async def adtext_prompt(client: Client, callback_query: CallbackQuery):
+    edit_states[callback_query.from_user.id] = "waiting_for_adtext"
+    text = "sᴇɴᴅ ᴍᴇ ᴀɴ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ᴛᴇxᴛ.\n\n/cancel"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_autodel_msg")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^u_adpic$"))
+async def adpic_prompt(client: Client, callback_query: CallbackQuery):
+    edit_states[callback_query.from_user.id] = "waiting_for_adpic"
+    text = "sᴇɴᴅ ᴍᴇ ᴀɴ ɪᴍᴀɢᴇ.\n\n/cancel"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_autodel_msg")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_callback_query(filters.regex("^u_adbuttons$"))
+async def adbuttons_prompt(client: Client, callback_query: CallbackQuery):
+    edit_states[callback_query.from_user.id] = "waiting_for_adbuttons"
+    text = "sᴇɴᴅ ᴍᴇ ʙᴜᴛᴛᴏɴs:\n\n[Button Text][buttonurl:https://link.com]\n\n/cancel"
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_autodel_msg")]]
+    await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+
 # ==========================================================
 # 🔹 THUMBNAIL
 # ==========================================================
@@ -668,6 +707,18 @@ async def receive_autodel_time(client: Client, message: Message):
     await message.reply_text(f"✅ Time set to {text}", reply_markup=InlineKeyboardMarkup(buttons))
 
 
+@Client.on_message(filters.private & filters.text & ~filters.command(["cancel", "start"]), group=99)
+async def receive_adtext(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_adtext":
+        return
+    edit_states.pop(user_id, None)
+    bot_username = (await client.get_me()).username
+    await db.set_setting(f"adtext_{bot_username}", message.text)
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_autodel_msg")]]
+    await message.reply_text("✅ Auto delete text saved.", reply_markup=InlineKeyboardMarkup(buttons))
+
+
 @Client.on_message(filters.private & filters.photo, group=98)
 async def receive_thumb(client: Client, message: Message):
     user_id = message.from_user.id
@@ -678,6 +729,18 @@ async def receive_thumb(client: Client, message: Message):
     await db.set_custom_thumbnail(bot_username, message.photo.file_id)
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_thumbnail")]]
     await message.reply_text("✅ Thumbnail saved.", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+@Client.on_message(filters.private & filters.photo, group=100)
+async def receive_adpic(client: Client, message: Message):
+    user_id = message.from_user.id
+    if edit_states.get(user_id) != "waiting_for_adpic":
+        return
+    edit_states.pop(user_id, None)
+    bot_username = (await client.get_me()).username
+    await db.set_setting(f"adpic_{bot_username}", message.photo.file_id)
+    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="u_autodel_msg")]]
+    await message.reply_text("✅ Auto delete pic saved.", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 @Client.on_message(filters.private, group=21)
