@@ -6,8 +6,8 @@ from utils.shortener import shorten_url
 from utils.verify_helper import needs_verification, mark_verified
 from utils.fsub_helper import check_subscription, build_fsub_keyboard
 from utils.fsub_middleware import check_force_sub
-from utils.logger import log_media_event
 import base64
+import re
 import time
 
 user_states = {}
@@ -43,62 +43,8 @@ async def batch_cmd(client: Client, message: Message):
     user_states[message.from_user.id] = "waiting_for_batch_file"
     buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
     await message.reply_text(
-        "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹 "
-        "(𝗪𝗶𝘁𝗵 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗮𝗴).. 𝗢𝗿 𝗚𝗶𝘃𝗲 𝗠𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 "
-        "𝗟𝗶𝗻𝗸 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
-        f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username}  ʙᴏᴛ ɪs ᴀᴅᴍɪɴ "
-        "ɪɴ ʏᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛ",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-
-# ==========================================================
-# 🔹 /custom_batch
-# ==========================================================
-@Client.on_message(filters.command("custom_batch") & filters.private)
-async def custom_batch_cmd(client: Client, message: Message):
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-
-    user_states[message.from_user.id] = "waiting_for_custom_batch"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
-    await message.reply_text(
-        "📝 **CUSTOM BATCH**\n\nSend message links (one per line).",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-
-# ==========================================================
-# 🔹 /multiple_batch
-# ==========================================================
-@Client.on_message(filters.command("multiple_batch") & filters.private)
-async def multiple_batch_cmd(client: Client, message: Message):
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-
-    user_states[message.from_user.id] = "waiting_for_multiple_batch"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
-    await message.reply_text(
-        "📦 **MULTIPLE BATCH**\n\nSend multiple channel messages (one per line).",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-
-# ==========================================================
-# 🔹 /special_link
-# ==========================================================
-@Client.on_message(filters.command("special_link") & filters.private)
-async def special_link_cmd(client: Client, message: Message):
-    bot_username = (await client.get_me()).username
-    if not await check_force_sub(client, message, bot_username):
-        return
-
-    user_states[message.from_user.id] = "waiting_for_special_link"
-    buttons = [[InlineKeyboardButton("🔙 Back", callback_data="main_back")]]
-    await message.reply_text(
-        "✨ **SPECIAL LINK**\n\nSend me the file to store with custom settings.",
+        "𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲 𝗙𝗶𝗿𝘀𝘁 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗙𝗿𝗼𝗺 𝗬𝗼𝘂𝗿 𝗕𝗮𝘁𝗰𝗵 𝗖𝗵𝗮𝗻𝗻𝗲𝗹\n\n"
+        f"ɴᴏᴛᴇ : ᴍᴀᴋᴇ sᴜʀᴇ ᴛʜɪs @{bot_username} ɪs ᴀᴅᴍɪɴ",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -130,7 +76,7 @@ async def handle_link_file(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
+            msg_text = fsub_text or "📢 **Please Join Our Channels**"
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -205,20 +151,6 @@ async def handle_link_file(client: Client, message: Message):
         disable_web_page_preview=True
     )
 
-    # ==========================================================
-    # 🔹 CENTRAL MASTER LOGGING
-    # ==========================================================
-    await log_media_event(
-        client=client,
-        event_type="media_upload",
-        message=message,
-        bot_username=bot_username,
-        user_id=user_id,
-        username=message.from_user.username,
-        clone_owner_id=None,
-        extra=f"🔗 Link: {final_link}"
-    )
-
 # ==========================================================
 # 🔹 HANDLE BATCH FILE
 # ==========================================================
@@ -286,7 +218,7 @@ async def handle_batch_count(client: Client, message: Message):
             fsub_text = await db.get_fsub_text(bot_username)
             fsub_img = await db.get_fsub_image(bot_username)
             keyboard = await build_fsub_keyboard(client, bot_username, not_joined)
-            msg_text = fsub_text or "📢 **Please Join Our Channels**\n\nTo use this bot, you must join the channels below.\nAfter joining, click **✅ I Joined**."
+            msg_text = fsub_text or "📢 **Please Join Our Channels**"
             if fsub_img:
                 await message.reply_photo(photo=fsub_img, caption=msg_text, reply_markup=keyboard)
             else:
@@ -340,20 +272,6 @@ async def handle_batch_count(client: Client, message: Message):
         f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
         reply_markup=InlineKeyboardMarkup(buttons),
         disable_web_page_preview=True
-    )
-
-    # ==========================================================
-    # 🔹 CENTRAL MASTER LOGGING (Batch)
-    # ==========================================================
-    await log_media_event(
-        client=client,
-        event_type="batch_upload",
-        message=message,
-        bot_username=bot_username,
-        user_id=user_id,
-        username=message.from_user.username,
-        clone_owner_id=None,
-        extra=f"📁 Batch Count: {count}\n🔗 Link: {final_link}"
     )
 
 
