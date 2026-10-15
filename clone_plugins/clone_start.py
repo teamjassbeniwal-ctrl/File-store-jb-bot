@@ -458,6 +458,7 @@ async def send_clone_settings(message, edit=False):
         [InlineKeyboardButton("💰 MONETIZATION", callback_data="c_monetization"),
          InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")],
         [InlineKeyboardButton("📝 START MESSAGE", callback_data="c_start_msg"),
+        ]
   
 
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
