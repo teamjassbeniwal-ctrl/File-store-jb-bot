@@ -117,9 +117,19 @@ class Database:
         )
 
     # ==========================================================
-    # 🔹 FILE STORAGE (Single & Batches)
+    # STORED FILE MANAGEMENT
     # ==========================================================
-    async def save_stored_file(self, unique_id, file_id, message_id, chat_id, owner_id, file_type="single"):
+
+    async def save_stored_file(
+        self,
+        unique_id,
+        file_id,
+        message_id,
+        chat_id,
+        owner_id,
+        file_type="single",
+        file_name=None
+    ):
         await self.stored_files.insert_one({
             "unique_id": unique_id,
             "file_id": file_id,
@@ -131,12 +141,27 @@ class Database:
         })
 
     async def get_stored_file(self, unique_id):
-        return await self.stored_files.find_one({"unique_id": unique_id})
+        return await self.stored_files.find_one({
+            "unique_id": unique_id
+        })
 
     async def delete_stored_file(self, unique_id):
-        await self.stored_files.delete_one({"unique_id": unique_id})
+        await self.stored_files.delete_one({
+            "unique_id": unique_id
+        })
 
-    async def save_batch(self, unique_id, from_chat_id, start_id, count, owner_id):
+    # ==========================================================
+    # BATCH FILE MANAGEMENT
+    # ==========================================================
+
+    async def save_batch(
+        self,
+        unique_id,
+        from_chat_id,
+        start_id,
+        count,
+        owner_id
+    ):
         await self.stored_files.insert_one({
             "unique_id": unique_id,
             "from_chat_id": from_chat_id,
@@ -147,7 +172,10 @@ class Database:
         })
 
     async def get_batch(self, unique_id):
-        return await self.stored_files.find_one({"unique_id": unique_id, "type": "batch"})
+        return await self.stored_files.find_one({
+            "unique_id": unique_id,
+            "type": "batch"
+        })
 
     # ==========================================================
     # 🔹 PREMIUM CODES
