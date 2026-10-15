@@ -10,57 +10,12 @@ import asyncio
 import base64
 import time
 
+# 1. Global state for tracking user input flow
 user_states = {}
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER (Matches Screenshots)
-# ==========================================================
-async def _auto_delete_file(client: Client, message, seconds: int, user_id: int, unique_id: str):
-    print(f"⏱️ Auto-delete: waiting {seconds}s")
-    
-    # 1. Send the "IMPORTANT" warning message
-    try:
-        warning_text = (
-            "‼️ ‼️ ‼️ **IMPORTANT** ‼️ ‼️ ‼️\n\n"
-            f"**THIS MESSAGE WILL BE DELETED IN {seconds // 60} Minutes** 🙁 **(DUE TO COPYRIGHT ISSUES).**\n\n"
-            "**PLEASE FORWARD THIS MESSAGE TO YOUR SAVED MESSAGES OR ANY PRIVATE CHAT TO AVOID LOSING.**"
-        )
-        await message.reply_text(warning_text)
-    except Exception as e:
-        print(f"Warning send failed: {e}")
-
-    # 2. Wait for the specified time
-    await asyncio.sleep(seconds)
-
-    try:
-        # 3. Delete the original file message
-        await message.delete()
-        print("✅ File deleted.")
-        
-        # 4. Send the "PREVIOUS MESSAGE IS DELETED" recovery menu
-        recovery_text = (
-            "🍿 **PREVIOUS MESSAGE IS DELETED**\n\n"
-            "**IF YOU WANT THIS PREVIOUS MESSAGE AGAIN THEN CLICK ON BELOW BUTTON OTHERWISE CLICK ON CLOSE BUTTON.**"
-        )
-        buttons = [
-            [InlineKeyboardButton("✅ GET MESSAGE AGAIN ✅", callback_data=f"get_again_{unique_id}")],
-            [InlineKeyboardButton("🔪 CLOSE 🔪", callback_data="close_recovery")]
-        ]
-        
-        await client.send_message(
-            chat_id=user_id,
-            text=recovery_text,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-        print("✅ Recovery menu sent.")
-        
-    except Exception as e:
-        print(f"⚠️ Auto-delete process failed: {type(e).__name__}: {e}")
-
-
-# ==========================================================
-# 🔹 /link
+# 2. /link COMMAND — asks user to send a message/file to store
 # ==========================================================
 @Client.on_message(filters.command("link") & filters.private)
 async def clone_link(client: Client, message: Message):
@@ -77,7 +32,7 @@ async def clone_link(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 /batch
+# 3. /batch COMMAND — asks user to forward first message from channel
 # ==========================================================
 @Client.on_message(filters.command("batch") & filters.private)
 async def clone_batch(client: Client, message: Message):
@@ -95,7 +50,7 @@ async def clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE (With exact screenshot formatting)
+# 4. HANDLE SINGLE FILE — receive, save, send link + Copy/Share
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -147,22 +102,26 @@ async def handle_clone_link(client: Client, message: Message):
             disable_web_page_preview=True
         )
 
-    # File processing
+    # File detection
     file_id = None
     media_type = None
+    file_name = None
 
     if message.document:
         file_id = message.document.file_id
         media_type = "document"
+        file_name = message.document.file_name
     elif message.video:
         file_id = message.video.file_id
         media_type = "video"
+        file_name = message.video.file_name
     elif message.photo:
         file_id = message.photo.file_id
         media_type = "photo"
     elif message.audio:
         file_id = message.audio.file_id
         media_type = "audio"
+        file_name = message.audio.file_name
     elif message.voice:
         file_id = message.voice.file_id
         media_type = "voice"
@@ -172,6 +131,7 @@ async def handle_clone_link(client: Client, message: Message):
     elif message.animation:
         file_id = message.animation.file_id
         media_type = "animation"
+        file_name = message.animation.file_name
     elif message.text:
         file_id = f"text:{message.text}"
         media_type = "text"
@@ -183,7 +143,11 @@ async def handle_clone_link(client: Client, message: Message):
     raw_id = f"{user_id}_{message.id}_{int(time.time())}"
     unique_id = base64.urlsafe_b64encode(raw_id.encode()).decode().rstrip("=")
 
-    await db.save_stored_file(unique_id, file_id, message.id, message.chat.id, user_id, "single")
+    # Save to DB (with file_name for caption later)
+    await db.save_stored_file(
+        unique_id, file_id, message.id, message.chat.id, user_id,
+        "single", file_name=file_name
+    )
 
     direct_link = f"https://telegram.me/{bot_username}?start={unique_id}"
     sl_status = await db.get_shortlink_status(bot_username)
@@ -196,150 +160,49 @@ async def handle_clone_link(client: Client, message: Message):
         if short:
             final_link = short
 
-    # Get custom settings
-    caption = await db.get_custom_caption(bot_username)
-    buttons_data = await db.get_custom_buttons(bot_username)
-    thumb = await db.get_custom_thumbnail(bot_username)
-    autodel_status = await db.get_auto_delete_status(bot_username)
-    autodel_time = await db.get_auto_delete_time(bot_username)
-
-    # Replace caption placeholders
-    file_name = "file"
-    file_size_str = ""
-    if message.document:
-        file_name = message.document.file_name or "file"
-        if message.document.file_size:
-            file_size_str = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
-    elif message.video:
-        file_name = message.video.file_name or "video"
-        if message.video.file_size:
-            file_size_str = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
-    elif message.audio:
-        file_name = message.audio.file_name or "audio"
-
-    # If no custom caption, use the exact format from the screenshot
-    if not caption:
-        caption = "🧐 **HERE IS YOUR LINK :**\n\n🖇️ `{final_link}`"
-    
-    caption = caption.replace("{file_name}", file_name)
-    caption = caption.replace("{file_size}", file_size_str)
-    caption = caption.replace("{final_link}", final_link)
-
-    # Build keyboard
-    keyboard = []
-    for row in buttons_data:
-        kb_row = []
-        for btn in row:
-            kb_row.append(InlineKeyboardButton(btn["text"], url=btn["url"]))
-        keyboard.append(kb_row)
-
-    # Add the Copy Link and Share URL buttons exactly as in the screenshot
-    keyboard.append([InlineKeyboardButton("📋 Copy Link 🔗", callback_data=f"copy_link_{unique_id}")])
-    keyboard.append([InlineKeyboardButton("♻️ SHARE URL ♻️", url=f"https://t.me/share/url?url={final_link}")])
-    keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="c_back")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # ==========================================================
-    # 🔹 SEND FILE
-    # ==========================================================
-    try:
-        sent = None
-
-        if media_type == "video":
-            sent = await client.send_video(
-                chat_id=message.chat.id,
-                video=file_id,
-                caption=caption,
-                thumb=thumb,
-                reply_markup=reply_markup
-            )
-        elif media_type == "document":
-            sent = await client.send_document(
-                chat_id=message.chat.id,
-                document=file_id,
-                caption=caption,
-                thumb=thumb,
-                reply_markup=reply_markup
-            )
-        elif media_type == "audio":
-            sent = await client.send_audio(
-                chat_id=message.chat.id,
-                audio=file_id,
-                caption=caption,
-                thumb=thumb,
-                reply_markup=reply_markup
-            )
-        elif media_type == "animation":
-            sent = await client.send_animation(
-                chat_id=message.chat.id,
-                animation=file_id,
-                caption=caption,
-                reply_markup=reply_markup
-            )
-        elif media_type == "photo":
-            sent = await client.send_photo(
-                chat_id=message.chat.id,
-                photo=file_id,
-                caption=caption,
-                reply_markup=reply_markup
-            )
-        elif media_type == "voice":
-            sent = await client.send_voice(
-                chat_id=message.chat.id,
-                voice=file_id,
-                caption=caption,
-                reply_markup=reply_markup
-            )
-        elif media_type == "video_note":
-            sent = await client.send_video_note(
-                chat_id=message.chat.id,
-                video_note=file_id
-            )
-        elif media_type == "text":
-            sent = await client.send_message(
-                chat_id=message.chat.id,
-                text=caption,
-                reply_markup=reply_markup
-            )
-
-        try:
-            await message.delete()
-        except Exception:
-            pass
-
-        # ==========================================================
-        # 🔹 AUTO DELETE
-        # ==========================================================
-        if autodel_status and sent:
-            try:
-                time_str = autodel_time.strip().lower()
-                if time_str.endswith("m"):
-                    seconds = int(time_str[:-1]) * 60
-                elif time_str.endswith("h"):
-                    seconds = int(time_str[:-1]) * 3600
-                elif time_str.endswith("s"):
-                    seconds = int(time_str[:-1])
-                else:
-                    seconds = 60
-                print(f"⏱️ Scheduling auto-delete in {seconds}s")
-                asyncio.create_task(_auto_delete_file(client, sent, seconds, user_id, unique_id))
-            except Exception as e:
-                print(f"⚠️ Auto-delete scheduling error: {e}")
-
-    except Exception as e:
-        print(f"File send error: {type(e).__name__}: {e}")
-        await message.reply_text(
-            f"✅ **File Stored!**\n\n🔗 **Link:**\n`{final_link}`",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔗 Open Link", url=final_link)],
-                [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
-            ])
-        )
+    # Send the LINK message (exact screenshot format)
+    link_text = (
+        "👨‍💻 **ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ :**\n\n"
+        f"🖇️ {final_link}"
+    )
+    link_buttons = [
+        [InlineKeyboardButton("📋 ᴄᴏᴘʏ ʟɪɴᴋ 🔗", callback_data=f"copy_link_{unique_id}"),
+         InlineKeyboardButton("♻️ sʜᴀʀᴇ ᴜʀʟ ♻️", url=f"https://t.me/share/url?url={final_link}")]
+    ]
+    await message.reply_text(
+        link_text,
+        reply_markup=InlineKeyboardMarkup(link_buttons),
+        disable_web_page_preview=False
+    )
 
 
 # ==========================================================
-# 🔹 HANDLE BATCH FILE
+# 5. COPY LINK CALLBACK — shows link in a copyable code block
+# ==========================================================
+@Client.on_callback_query(filters.regex("^copy_link_"))
+async def copy_link_callback(client: Client, callback_query):
+    unique_id = callback_query.data.replace("copy_link_", "")
+    bot_username = (await client.get_me()).username
+    final_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+
+    try:
+        temp = await callback_query.message.reply_text(
+            f"`{final_link}`",
+            disable_web_page_preview=True
+        )
+        await callback_query.answer("📋 Link sent above — tap to copy!", show_alert=False)
+        await asyncio.sleep(30)
+        try:
+            await temp.delete()
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"Copy link error: {e}")
+        await callback_query.answer("Copy failed", show_alert=True)
+
+
+# ==========================================================
+# 6. HANDLE BATCH FILE — receive forwarded message
 # ==========================================================
 @Client.on_message(filters.private, group=2)
 async def handle_clone_batch(client: Client, message: Message):
@@ -378,7 +241,7 @@ async def handle_clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE BATCH COUNT
+# 7. HANDLE BATCH COUNT — receive count, generate batch link
 # ==========================================================
 @Client.on_message(filters.private & filters.text & ~filters.command(["cancel"]), group=3)
 async def handle_clone_batch_count(client: Client, message: Message):
@@ -397,6 +260,7 @@ async def handle_clone_batch_count(client: Client, message: Message):
 
     bot_username = (await client.get_me()).username
 
+    # Force Sub gate
     fsub_status = await db.get_fsub_status(bot_username)
     if fsub_status:
         not_joined = await check_subscription(client, user_id, bot_username)
@@ -411,6 +275,7 @@ async def handle_clone_batch_count(client: Client, message: Message):
                 await message.reply_text(msg_text, reply_markup=keyboard, disable_web_page_preview=True)
             return
 
+    # Verification gate
     if await needs_verification(user_id, bot_username):
         v_url = await db.get_verify_shortlink_url(bot_username)
         v_api = await db.get_verify_shortlink_api(bot_username)
@@ -423,7 +288,7 @@ async def handle_clone_batch_count(client: Client, message: Message):
         if tutorial:
             buttons.append([InlineKeyboardButton("📺 Tutorial", url=tutorial)])
         return await message.reply_text(
-            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪғɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
+            f"ʜᴇʏ {message.from_user.first_name}\n\nʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴠᴇʀɪꜰɪᴇᴅ ᴛᴏᴅᴀʏ 😐\n#ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ:- 1/2",
             reply_markup=InlineKeyboardMarkup(buttons),
             disable_web_page_preview=True
         )
@@ -448,19 +313,24 @@ async def handle_clone_batch_count(client: Client, message: Message):
         if short:
             final_link = short
 
-    buttons = [
-        [InlineKeyboardButton("🔗 Open Batch", url=final_link)],
-        [InlineKeyboardButton("🔙 Back", callback_data="c_back")]
+    link_text = (
+        "👨‍💻 **ʜᴇʀᴇ ɪs ʏᴏᴜʀ ʟɪɴᴋ :**\n\n"
+        f"🖇️ {final_link}\n\n"
+        f"📦 Files: `{count}`"
+    )
+    link_buttons = [
+        [InlineKeyboardButton("📋 ᴄᴏᴘʏ ʟɪɴᴋ 🔗", callback_data=f"copy_link_{unique_id}"),
+         InlineKeyboardButton("♻️ sʜᴀʀᴇ ᴜʀʟ ♻️", url=f"https://t.me/share/url?url={final_link}")]
     ]
     await message.reply_text(
-        f"✅ **Batch Stored!**\n\n📦 Files: `{count}`\n🔗 **Link:** `{final_link}`",
-        reply_markup=InlineKeyboardMarkup(buttons),
-        disable_web_page_preview=True
+        link_text,
+        reply_markup=InlineKeyboardMarkup(link_buttons),
+        disable_web_page_preview=False
     )
 
 
 # ==========================================================
-# 🔹 VERIFICATION CALLBACK
+# 8. VERIFY CALLBACK — handles /start verify_XXX deep link
 # ==========================================================
 @Client.on_message(filters.private & filters.regex(r"^/start verify_(\d+)$"), group=4)
 async def handle_verify_callback(client: Client, message: Message):
@@ -471,7 +341,7 @@ async def handle_verify_callback(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 CANCEL
+# 9. CANCEL — clears user input state
 # ==========================================================
 @Client.on_message(filters.command("cancel") & filters.private)
 async def clone_cancel(client: Client, message: Message):
