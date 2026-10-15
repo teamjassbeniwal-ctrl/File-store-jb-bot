@@ -13,27 +13,58 @@ BOT_START_TIME = time.time()
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER
+# 🔹 AUTO DELETE HELPER — Full flow
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
         bot_username = (await client.get_me()).username
-        adtext = await db.get_setting(f"adtext_{bot_username}") or "⚠️ **This file has been auto-deleted** due to copyright protection."
+        adtext = await db.get_setting(f"adtext_{bot_username}") or (
+            "⚠️ ᴛʜɪs ᴍᴏᴠɪᴇ ғɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ɪɴ 1 ᴍɪɴᴜᴛᴇ\n"
+            "ᴘʟᴇᴀꜱᴇ ғᴏʀᴡᴀʀᴅ ᴛʜɪs ғɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ & ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ"
+        )
         adpic = await db.get_setting(f"adpic_{bot_username}")
 
+        alert_msg = None
         try:
             if adpic:
-                await message.reply_photo(photo=adpic, caption=adtext)
+                alert_msg = await message.reply_photo(photo=adpic, caption=adtext)
             else:
-                await message.reply_text(adtext)
+                alert_msg = await message.reply_text(adtext)
             print("✅ Alert sent.")
         except Exception as e:
             print(f"Alert send failed: {e}")
 
-        await message.delete()
-        print("✅ File deleted.")
+        await asyncio.sleep(3)
+
+        try:
+            await message.delete()
+            print("✅ File deleted.")
+        except Exception as e:
+            print(f"File delete failed: {e}")
+
+        await asyncio.sleep(3)
+        try:
+            if alert_msg:
+                await alert_msg.delete()
+                print("✅ Alert deleted.")
+        except Exception as e:
+            print(f"Alert delete failed: {e}")
+
+        try:
+            success_msg = await client.send_message(
+                chat_id=message.chat.id,
+                text="✅ **Your file has been successfully deleted.**"
+            )
+            await asyncio.sleep(5)
+            try:
+                await success_msg.delete()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"Success message failed: {e}")
+
     except Exception as e:
         print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
@@ -112,11 +143,18 @@ async def clone_start(client: Client, message: Message):
                     if fid.startswith("text:"):
                         await message.reply_text(fid.replace("text:", ""))
                     else:
-                        caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
+                        # Custom settings
                         buttons_data = await db.get_custom_buttons(bot_username)
                         thumb = await db.get_custom_thumbnail(bot_username)
                         autodel_status = await db.get_auto_delete_status(bot_username)
                         autodel_time = await db.get_auto_delete_time(bot_username)
+
+                        # Caption — use owner custom or default
+                        custom_caption = await db.get_custom_caption(bot_username)
+                        if custom_caption:
+                            caption = custom_caption
+                        else:
+                            caption = "📁 **Here is your file**"
 
                         keyboard = []
                         for row in buttons_data:
@@ -843,10 +881,6 @@ async def cancel_clone_edit(client: Client, message: Message):
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_settings")]]
         await message.reply_text("✅ Cancelled.", reply_markup=InlineKeyboardMarkup(buttons))
 
-
-# ==========================================================
-# 🔹 ADMINS / STATUS / MODE / RESTART / DELETE / BACK / PLAN / VERIFY
-# ==========================================================
 @Client.on_callback_query(filters.regex("^c_admins$"))
 async def admins_menu(client: Client, callback_query: CallbackQuery):
     bot_username = (await client.get_me()).username
@@ -1037,4 +1071,79 @@ async def fsub_check(client: Client, callback_query: CallbackQuery):
     from utils.fsub_helper import check_subscription
     not_joined = await check_subscription(client, callback_query.from_user.id, bot_username)
     if not not_joined:
-        await callback_query.answer("✅ Verified!", show_alert)
+        await callback_query.answer("✅ Verified!", show_alert=True)
+        try:
+            await callback_query.message.delete()
+        except Exception:
+            pass
+        await callback_query.message.reply_text("✅ **Verification Complete!**")
+    else:
+        await callback_query.answer("⚠️ You haven't joined all channels yet.", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("^u_(free_limit|refer|permanent_link|protect_content)$"))
+async def user_setting_handler(client: Client, callback_query: CallbackQuery):
+    key = callback_query.data.replace("u_", "")
+    messages = {
+        "free_limit": "🆓 Free usage: 5 files per day.",
+        "refer": "🌍 Refer & Earn: Coming soon!",
+        "permanent_link": "♾️ Permanent Link: Toggle.",
+        "protect_content": "🔒 Protect Content: Toggle."
+    }
+    await callback_query.answer(messages.get(key, "Coming soon"), show_alert=True)
+
+
+@Client.on_message(filters.command("broadcast") & filters.private)
+async def clone_broadcast(client: Client, message: Message):
+    user_id = message.from_user.id
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if not clone_data or clone_data["user_id"] != user_id:
+        return await message.reply_text("❌ Owner only.")
+    if not message.reply_to_message:
+        return await message.reply_text("⚠️ Reply to a message.")
+    users = await db.get_all_users()
+    status = await message.reply_text(f"📢 Broadcasting to {len(users)} users...")
+    success = 0
+    for u in users:
+        try:
+            await message.reply_to_message.copy(u["user_id"])
+            success += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            pass
+    await status.edit_text(f"✅ Sent to {success}/{len(users)} users.")
+
+
+@Client.on_message(filters.command("ban") & filters.private)
+async def clone_ban(client: Client, message: Message):
+    user_id = message.from_user.id
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if not clone_data or clone_data["user_id"] != user_id:
+        return await message.reply_text("❌ Owner only.")
+    if len(message.command) < 2:
+        return await message.reply_text("⚠️ Usage: /ban [user_id]")
+    try:
+        target = int(message.command[1])
+    except ValueError:
+        return await message.reply_text("❌ Invalid ID.")
+    await db.ban_user(target)
+    await message.reply_text(f"✅ User {target} banned.")
+
+
+@Client.on_message(filters.command("unban") & filters.private)
+async def clone_unban(client: Client, message: Message):
+    user_id = message.from_user.id
+    bot_username = (await client.get_me()).username
+    clone_data = await db.get_clone_by_username(bot_username)
+    if not clone_data or clone_data["user_id"] != user_id:
+        return await message.reply_text("❌ Owner only.")
+    if len(message.command) < 2:
+        return await message.reply_text("⚠️ Usage: /unban [user_id]")
+    try:
+        target = int(message.command[1])
+    except ValueError:
+        return await message.reply_text("❌ Invalid ID.")
+    await db.unban_user(target)
+    await message.reply_text(f"✅ User {target} unbanned.")
