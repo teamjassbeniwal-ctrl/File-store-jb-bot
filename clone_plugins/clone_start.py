@@ -458,8 +458,20 @@ async def send_clone_settings(message, edit=False):
         [InlineKeyboardButton("💰 MONETIZATION", callback_data="c_monetization"),
          InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")],
         [InlineKeyboardButton("📝 START MESSAGE", callback_data="c_start_msg"),
-        ]
-  
+         InlineKeyboardButton("📢 LOG CHANNEL", callback_data="c_log_channel")],
+        [InlineKeyboardButton("☁️ DATABASE CHANNEL", callback_data="c_db_channel"),
+         InlineKeyboardButton("👥 ADMINS", callback_data="c_admins")],
+        [InlineKeyboardButton("📊 BOT STATUS", callback_data="c_status"),
+         InlineKeyboardButton("🛍️ BOT MODE", callback_data="c_bot_mode")],
+        [InlineKeyboardButton("⏱️ RESTART BOT", callback_data="c_restart"),
+         InlineKeyboardButton("🚫 DELETE BOT", callback_data="c_delete_bot")],
+        [InlineKeyboardButton("🔍 MORE FEATURES", callback_data="c_more_features")],
+        [InlineKeyboardButton("🔙 BACK", callback_data="c_back")]
+    ]
+    if edit:
+        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
