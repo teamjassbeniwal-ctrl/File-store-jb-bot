@@ -53,7 +53,7 @@ async def _auto_delete_file(client: Client, file_msg, warning_msg, seconds: int,
 
 
 # ==========================================================
-# 3. SEND STORED FILE (reused by /start deep-link & get_again)
+# SEND STORED FILE (reused by /start deep-link & get_again)
 # ==========================================================
 async def _send_stored_file(client: Client, chat_id: int, user_id: int, unique_id: str, bot_username: str):
     stored = await db.get_stored_file(unique_id)
@@ -66,6 +66,7 @@ async def _send_stored_file(client: Client, chat_id: int, user_id: int, unique_i
         await client.send_message(chat_id, fid.replace("text:", ""))
         return
 
+    # Fetch custom settings
     caption = await db.get_custom_caption(bot_username)
     buttons_data = await db.get_custom_buttons(bot_username)
     thumb = await db.get_custom_thumbnail(bot_username)
@@ -74,12 +75,17 @@ async def _send_stored_file(client: Client, chat_id: int, user_id: int, unique_i
 
     file_name = stored.get("file_name") or "video.mp4"
 
+    # Debug log (remove later)
+    print(f"DEBUG THUMB: {'SET' if thumb else 'NONE'} | file: {file_name}")
+
+    # Build caption
     if caption:
         caption = caption.replace("{file_name}", file_name)
         caption = caption.replace("{file_size}", "")
     else:
         caption = file_name
 
+    # Build keyboard from custom buttons
     keyboard = []
     for row in buttons_data:
         kb_row = []
@@ -88,23 +94,73 @@ async def _send_stored_file(client: Client, chat_id: int, user_id: int, unique_i
         keyboard.append(kb_row)
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
 
-    try:
-        sent = await client.send_cached_media(
-            chat_id=chat_id,
-            file_id=fid,
-            caption=caption,
-            thumb=thumb,
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        print(f"Send cached media error: {type(e).__name__}: {e}")
+    # ==========================================================
+    # DETECT FILE TYPE AND SEND WITH CUSTOM THUMBNAIL
+    # ==========================================================
+    sent = None
+    ext = (file_name or "").lower()
+
+    # VIDEO
+    if ext.endswith((".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".3gp")):
         try:
-            sent = await client.send_cached_media(chat_id=chat_id, file_id=fid, caption=caption)
-        except Exception as e2:
-            print(f"Fallback failed: {e2}")
+            sent = await client.send_video(
+                chat_id=chat_id,
+                video=fid,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+            print("✅ Sent as video with thumbnail")
+        except Exception as e:
+            print(f"send_video error: {type(e).__name__}: {e}")
+
+    # AUDIO
+    elif ext.endswith((".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".flac")):
+        try:
+            sent = await client.send_audio(
+                chat_id=chat_id,
+                audio=fid,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+            print("✅ Sent as audio with thumbnail")
+        except Exception as e:
+            print(f"send_audio error: {type(e).__name__}: {e}")
+
+    # DOCUMENT (default for everything else)
+    if sent is None:
+        try:
+            sent = await client.send_document(
+                chat_id=chat_id,
+                document=fid,
+                caption=caption,
+                thumb=thumb,
+                reply_markup=reply_markup
+            )
+            print("✅ Sent as document with thumbnail")
+        except Exception as e:
+            print(f"send_document error: {type(e).__name__}: {e}")
+            sent = None
+
+    # FALLBACK — cached media (thumbnail won't apply)
+    if sent is None:
+        try:
+            sent = await client.send_cached_media(
+                chat_id=chat_id,
+                file_id=fid,
+                caption=caption,
+                reply_markup=reply_markup
+            )
+            print("⚠️ Fell back to send_cached_media (thumbnail NOT applied)")
+        except Exception as e:
+            print(f"Final fallback error: {type(e).__name__}: {e}")
             await client.send_message(chat_id, "❌ Failed to send file.")
             return
 
+    # ==========================================================
+    # AUTO-DELETE SEQUENCE (warning + deletion + recovery menu)
+    # ==========================================================
     if autodel_status and sent:
         try:
             time_str = autodel_time.strip().lower()
@@ -130,9 +186,9 @@ async def _send_stored_file(client: Client, chat_id: int, user_id: int, unique_i
             asyncio.create_task(
                 _auto_delete_file(client, sent, warning_msg, seconds, user_id, unique_id)
             )
+            print(f"⏱️ Auto-delete scheduled in {seconds}s")
         except Exception as e:
             print(f"⚠️ Auto-delete scheduling error: {e}")
-
 
 # ==========================================================
 # 4. /start
