@@ -126,7 +126,8 @@ class Database:
             "message_id": message_id,
             "chat_id": chat_id,
             "owner_id": owner_id,
-            "type": file_type
+            "type": file_type,
+            "file_name": file_name
         })
 
     async def get_stored_file(self, unique_id):
