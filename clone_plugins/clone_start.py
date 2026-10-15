@@ -13,60 +13,49 @@ BOT_START_TIME = time.time()
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER — Full flow
+# 🔹 AUTO DELETE HELPER (For Deep Links)
 # ==========================================================
-async def _auto_delete_file(client: Client, message, seconds: int):
+async def _auto_delete_file(client: Client, message, seconds: int, user_id: int, unique_id: str):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
-    await asyncio.sleep(seconds)
+    
+    # 1. Send the "IMPORTANT" warning message
     try:
-        bot_username = (await client.get_me()).username
-        adtext = await db.get_setting(f"adtext_{bot_username}") or (
-            "⚠️ ᴛʜɪs ᴍᴏᴠɪᴇ ғɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ɪɴ 1 ᴍɪɴᴜᴛᴇ\n"
-            "ᴘʟᴇᴀꜱᴇ ғᴏʀᴡᴀʀᴅ ᴛʜɪs ғɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ & ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ"
+        warning_text = (
+            "‼️ ‼️ ‼️ **IMPORTANT** ‼️ ‼️ ‼️\n\n"
+            f"**THIS MESSAGE WILL BE DELETED IN {seconds // 60} Minutes** 🙁 **(DUE TO COPYRIGHT ISSUES).**\n\n"
+            "**PLEASE FORWARD THIS MESSAGE TO YOUR SAVED MESSAGES OR ANY PRIVATE CHAT TO AVOID LOSING.**"
         )
-        adpic = await db.get_setting(f"adpic_{bot_username}")
-
-        alert_msg = None
-        try:
-            if adpic:
-                alert_msg = await message.reply_photo(photo=adpic, caption=adtext)
-            else:
-                alert_msg = await message.reply_text(adtext)
-            print("✅ Alert sent.")
-        except Exception as e:
-            print(f"Alert send failed: {e}")
-
-        await asyncio.sleep(3)
-
-        try:
-            await message.delete()
-            print("✅ File deleted.")
-        except Exception as e:
-            print(f"File delete failed: {e}")
-
-        await asyncio.sleep(3)
-        try:
-            if alert_msg:
-                await alert_msg.delete()
-                print("✅ Alert deleted.")
-        except Exception as e:
-            print(f"Alert delete failed: {e}")
-
-        try:
-            success_msg = await client.send_message(
-                chat_id=message.chat.id,
-                text="✅ **Your file has been successfully deleted.**"
-            )
-            await asyncio.sleep(5)
-            try:
-                await success_msg.delete()
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"Success message failed: {e}")
-
+        await message.reply_text(warning_text)
     except Exception as e:
-        print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
+        print(f"Warning send failed: {e}")
+
+    # 2. Wait for the specified time
+    await asyncio.sleep(seconds)
+
+    try:
+        # 3. Delete the original file message
+        await message.delete()
+        print("✅ File deleted.")
+        
+        # 4. Send the "PREVIOUS MESSAGE IS DELETED" recovery menu
+        recovery_text = (
+            "🍿 **PREVIOUS MESSAGE IS DELETED**\n\n"
+            "**IF YOU WANT THIS PREVIOUS MESSAGE AGAIN THEN CLICK ON BELOW BUTTON OTHERWISE CLICK ON CLOSE BUTTON.**"
+        )
+        buttons = [
+            [InlineKeyboardButton("✅ GET MESSAGE AGAIN ✅", callback_data=f"get_again_{unique_id}")],
+            [InlineKeyboardButton("🔪 CLOSE 🔪", callback_data="close_recovery")]
+        ]
+        
+        await client.send_message(
+            chat_id=user_id,
+            text=recovery_text,
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+        print("✅ Recovery menu sent.")
+        
+    except Exception as e:
+        print(f"⚠️ Auto-delete process failed: {type(e).__name__}: {e}")
 
 
 # ==========================================================
@@ -143,19 +132,20 @@ async def clone_start(client: Client, message: Message):
                     if fid.startswith("text:"):
                         await message.reply_text(fid.replace("text:", ""))
                     else:
-                        # Custom settings
+                        caption = await db.get_custom_caption(bot_username)
                         buttons_data = await db.get_custom_buttons(bot_username)
                         thumb = await db.get_custom_thumbnail(bot_username)
                         autodel_status = await db.get_auto_delete_status(bot_username)
                         autodel_time = await db.get_auto_delete_time(bot_username)
 
-                        # Caption — use owner custom or default
-                        custom_caption = await db.get_custom_caption(bot_username)
-                        if custom_caption:
-                            caption = custom_caption
-                        else:
-                            caption = "📁 **Here is your file**"
+                        # Build caption
+                        if not caption:
+                            caption = "🧐 **HERE IS YOUR LINK :**\n\n🖇️ `{final_link}`"
+                        
+                        final_link = f"https://telegram.me/{bot_username}?start={payload}"
+                        caption = caption.replace("{final_link}", final_link)
 
+                        # Build keyboard
                         keyboard = []
                         for row in buttons_data:
                             kb_row = []
@@ -163,13 +153,17 @@ async def clone_start(client: Client, message: Message):
                                 kb_row.append(InlineKeyboardButton(btn["text"], url=btn["url"]))
                             keyboard.append(kb_row)
 
-                        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+                        keyboard.append([InlineKeyboardButton("📋 Copy Link 🔗", callback_data=f"copy_link_{payload}")])
+                        keyboard.append([InlineKeyboardButton("♻️ SHARE URL ♻️", url=f"https://t.me/share/url?url={final_link}")])
+
+                        reply_markup = InlineKeyboardMarkup(keyboard)
 
                         try:
                             sent = await client.send_cached_media(
                                 chat_id=message.chat.id,
                                 file_id=fid,
                                 caption=caption,
+                                thumb=thumb,
                                 reply_markup=reply_markup
                             )
                             if autodel_status and sent:
@@ -184,7 +178,7 @@ async def clone_start(client: Client, message: Message):
                                     else:
                                         seconds = 60
                                     print(f"⏱️ Scheduling auto-delete in {seconds}s (deep link)")
-                                    asyncio.create_task(_auto_delete_file(client, sent, seconds))
+                                    asyncio.create_task(_auto_delete_file(client, sent, seconds, user_id, payload))
                                 except Exception as e:
                                     print(f"⚠️ Auto-delete error: {e}")
                         except Exception as e:
@@ -236,6 +230,106 @@ async def clone_start(client: Client, message: Message):
     else:
         await message.reply_text(formatted_text, reply_markup=reply_markup)
 
+
+# ==========================================================
+# 🔹 CALLBACK HANDLERS FOR RECOVERY MENU & COPY LINK
+# ==========================================================
+
+@Client.on_callback_query(filters.regex("^copy_link_"))
+async def copy_link_cb(client: Client, callback_query: CallbackQuery):
+    unique_id = callback_query.data.replace("copy_link_", "")
+    bot_username = (await client.get_me()).username
+    final_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    
+    await callback_query.answer("Link copied to clipboard!", show_alert=False)
+    # Send a temporary message that the user can easily copy
+    await callback_query.message.reply_text(
+        f"`{final_link}`",
+        disable_web_page_preview=True
+    )
+
+@Client.on_callback_query(filters.regex("^get_again_"))
+async def get_again_cb(client: Client, callback_query: CallbackQuery):
+    unique_id = callback_query.data.replace("get_again_", "")
+    bot_username = (await client.get_me()).username
+    
+    # 1. Acknowledge
+    await callback_query.answer("Fetching message...", show_alert=False)
+    
+    # 2. Delete the recovery menu message
+    try:
+        await callback_query.message.delete()
+    except Exception:
+        pass
+
+    # 3. Resend the file (logic similar to /start deep link)
+    stored = await db.get_stored_file(unique_id)
+    if not stored:
+        return await client.send_message(callback_query.from_user.id, "❌ File not found. It may have been deleted.")
+
+    fid = stored["file_id"]
+    if fid.startswith("text:"):
+        return await client.send_message(callback_query.from_user.id, fid.replace("text:", ""))
+
+    caption = await db.get_custom_caption(bot_username)
+    buttons_data = await db.get_custom_buttons(bot_username)
+    thumb = await db.get_custom_thumbnail(bot_username)
+    autodel_status = await db.get_auto_delete_status(bot_username)
+    autodel_time = await db.get_auto_delete_time(bot_username)
+
+    final_link = f"https://telegram.me/{bot_username}?start={unique_id}"
+    if not caption:
+        caption = "🧐 **HERE IS YOUR LINK :**\n\n🖇️ `{final_link}`"
+    caption = caption.replace("{final_link}", final_link)
+
+    keyboard = []
+    for row in buttons_data:
+        kb_row = []
+        for btn in row:
+            kb_row.append(InlineKeyboardButton(btn["text"], url=btn["url"]))
+        keyboard.append(kb_row)
+    
+    keyboard.append([InlineKeyboardButton("📋 Copy Link 🔗", callback_data=f"copy_link_{unique_id}")])
+    keyboard.append([InlineKeyboardButton("♻️ SHARE URL ♻️", url=f"https://t.me/share/url?url={final_link}")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    try:
+        sent = await client.send_cached_media(
+            chat_id=callback_query.from_user.id,
+            file_id=fid,
+            caption=caption,
+            thumb=thumb,
+            reply_markup=reply_markup
+        )
+        # Re-schedule auto delete
+        if autodel_status and sent:
+            time_str = autodel_time.strip().lower()
+            if time_str.endswith("m"):
+                seconds = int(time_str[:-1]) * 60
+            elif time_str.endswith("h"):
+                seconds = int(time_str[:-1]) * 3600
+            elif time_str.endswith("s"):
+                seconds = int(time_str[:-1])
+            else:
+                seconds = 60
+            asyncio.create_task(_auto_delete_file(client, sent, seconds, callback_query.from_user.id, unique_id))
+    except Exception as e:
+        print(f"Error resending file: {e}")
+        await client.send_message(callback_query.from_user.id, "❌ Failed to fetch the file. It might have been deleted from Telegram servers.")
+
+@Client.on_callback_query(filters.regex("^close_recovery$"))
+async def close_recovery_cb(client: Client, callback_query: CallbackQuery):
+    try:
+        await callback_query.message.delete()
+    except Exception:
+        pass
+    await callback_query.answer("Closed", show_alert=False)
+
+
+# ==========================================================
+# 🔹 HELP, ABOUT, ID, SETTINGS (Unchanged)
+# ==========================================================
 @Client.on_message(filters.command("help") & filters.private)
 async def clone_help_cmd(client: Client, message: Message):
     bot_username = (await client.get_me()).username
@@ -285,7 +379,6 @@ async def clone_about_cb(client: Client, callback_query: CallbackQuery):
         [InlineKeyboardButton("Back", callback_data="c_back")]
     ]
     await callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
 
 @Client.on_message(filters.command("id") & filters.private)
 async def clone_id_cmd(client: Client, message: Message):
@@ -365,20 +458,7 @@ async def send_clone_settings(message, edit=False):
         [InlineKeyboardButton("💰 MONETIZATION", callback_data="c_monetization"),
          InlineKeyboardButton("💎 PREMIUM PLAN", callback_data="premium")],
         [InlineKeyboardButton("📝 START MESSAGE", callback_data="c_start_msg"),
-         InlineKeyboardButton("📢 LOG CHANNEL", callback_data="c_log_channel")],
-        [InlineKeyboardButton("☁️ DATABASE CHANNEL", callback_data="c_db_channel"),
-         InlineKeyboardButton("👥 ADMINS", callback_data="c_admins")],
-        [InlineKeyboardButton("📊 BOT STATUS", callback_data="c_status"),
-         InlineKeyboardButton("🛍️ BOT MODE", callback_data="c_bot_mode")],
-        [InlineKeyboardButton("⏱️ RESTART BOT", callback_data="c_restart"),
-         InlineKeyboardButton("🚫 DELETE BOT", callback_data="c_delete_bot")],
-        [InlineKeyboardButton("🔍 MORE FEATURES", callback_data="c_more_features")],
-        [InlineKeyboardButton("🔙 BACK", callback_data="c_back")]
-    ]
-    if edit:
-        await message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-    else:
-        await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+  
 
 @Client.on_callback_query(filters.regex("^c_log_channel$"))
 async def log_channel_menu(client: Client, callback_query: CallbackQuery):
