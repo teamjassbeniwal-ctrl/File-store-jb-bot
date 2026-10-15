@@ -14,29 +14,64 @@ user_states = {}
 
 
 # ==========================================================
-# 🔹 AUTO DELETE HELPER — Alert stays, file deleted
+# 🔹 AUTO DELETE HELPER — Full flow
 # ==========================================================
 async def _auto_delete_file(client: Client, message, seconds: int):
     print(f"⏱️ Auto-delete: waiting {seconds}s")
     await asyncio.sleep(seconds)
     try:
         bot_username = (await client.get_me()).username
-        adtext = await db.get_setting(f"adtext_{bot_username}") or "⚠️ **This file has been auto-deleted** due to copyright protection."
+        adtext = await db.get_setting(f"adtext_{bot_username}") or (
+            "⚠️ ᴛʜɪs ᴍᴏᴠɪᴇ ғɪʟᴇ/ᴠɪᴅᴇᴏ ᴡɪʟʟ ʙᴇ ᴅᴇʟᴇᴛᴇᴅ ɪɴ 1 ᴍɪɴᴜᴛᴇ\n"
+            "ᴘʟᴇᴀꜱᴇ ғᴏʀᴡᴀʀᴅ ᴛʜɪs ғɪʟᴇ ᴛᴏ ꜱᴏᴍᴇᴡʜᴇʀᴇ ᴇʟꜱᴇ & ꜱᴛᴀʀᴛ ᴅᴏᴡɴʟᴏᴀᴅɪɴɢ ᴛʜᴇʀᴇ"
+        )
         adpic = await db.get_setting(f"adpic_{bot_username}")
 
-        # Send alert (stays in chat)
+        # 1. Alert message
+        alert_msg = None
         try:
             if adpic:
-                await message.reply_photo(photo=adpic, caption=adtext)
+                alert_msg = await message.reply_photo(photo=adpic, caption=adtext)
             else:
-                await message.reply_text(adtext)
+                alert_msg = await message.reply_text(adtext)
             print("✅ Alert sent.")
         except Exception as e:
             print(f"Alert send failed: {e}")
 
-        # Delete the FILE only (alert stays)
-        await message.delete()
-        print("✅ File deleted.")
+        # 2. Wait 3 sec
+        await asyncio.sleep(3)
+
+        # 3. Delete file
+        try:
+            await message.delete()
+            print("✅ File deleted.")
+        except Exception as e:
+            print(f"File delete failed: {e}")
+
+        # 4. Wait 3 sec, delete alert
+        await asyncio.sleep(3)
+        try:
+            if alert_msg:
+                await alert_msg.delete()
+                print("✅ Alert deleted.")
+        except Exception as e:
+            print(f"Alert delete failed: {e}")
+
+        # 5. Send success message
+        try:
+            success_msg = await client.send_message(
+                chat_id=message.chat.id,
+                text="✅ **Your file has been successfully deleted.**"
+            )
+            await asyncio.sleep(5)
+            try:
+                await success_msg.delete()
+            except Exception:
+                pass
+            print("✅ Success message deleted.")
+        except Exception as e:
+            print(f"Success message failed: {e}")
+
     except Exception as e:
         print(f"⚠️ Auto-delete failed: {type(e).__name__}: {e}")
 
@@ -77,7 +112,7 @@ async def clone_batch(client: Client, message: Message):
 
 
 # ==========================================================
-# 🔹 HANDLE SINGLE FILE (with proper thumbnail, caption, buttons)
+# 🔹 HANDLE SINGLE FILE — with real filename caption
 # ==========================================================
 @Client.on_message(
     filters.private &
@@ -132,31 +167,47 @@ async def handle_clone_link(client: Client, message: Message):
     # File processing
     file_id = None
     media_type = None
+    real_file_name = "file"
+    real_file_size = ""
 
     if message.document:
         file_id = message.document.file_id
         media_type = "document"
+        real_file_name = message.document.file_name or "document"
+        if message.document.file_size:
+            real_file_size = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
     elif message.video:
         file_id = message.video.file_id
         media_type = "video"
+        real_file_name = message.video.file_name or "video"
+        if message.video.file_size:
+            real_file_size = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
     elif message.photo:
         file_id = message.photo.file_id
         media_type = "photo"
+        real_file_name = "photo.jpg"
     elif message.audio:
         file_id = message.audio.file_id
         media_type = "audio"
+        real_file_name = message.audio.file_name or "audio"
+        if message.audio.file_size:
+            real_file_size = f"{round(message.audio.file_size / 1024 / 1024, 2)} MB"
     elif message.voice:
         file_id = message.voice.file_id
         media_type = "voice"
+        real_file_name = "voice.ogg"
     elif message.video_note:
         file_id = message.video_note.file_id
         media_type = "video_note"
+        real_file_name = "video_note"
     elif message.animation:
         file_id = message.animation.file_id
         media_type = "animation"
+        real_file_name = message.animation.file_name or "animation"
     elif message.text:
         file_id = f"text:{message.text}"
         media_type = "text"
+        real_file_name = "text.txt"
 
     if not file_id:
         buttons = [[InlineKeyboardButton("🔙 Back", callback_data="c_back")]]
@@ -179,30 +230,25 @@ async def handle_clone_link(client: Client, message: Message):
             final_link = short
 
     # Get custom settings
-    caption = await db.get_custom_caption(bot_username) or "📁 **Here is your file**"
     buttons_data = await db.get_custom_buttons(bot_username)
     thumb = await db.get_custom_thumbnail(bot_username)
     autodel_status = await db.get_auto_delete_status(bot_username)
     autodel_time = await db.get_auto_delete_time(bot_username)
 
-    print(f"DEBUG: media_type={media_type}, thumb={thumb is not None}, caption={caption[:40]}, autodel={autodel_status}")
+    # Caption — use owner's custom, else real file name
+    custom_caption = await db.get_custom_caption(bot_username)
+    if custom_caption:
+        caption = custom_caption.replace("{file_name}", real_file_name)
+        caption = caption.replace("{file_size}", real_file_size)
+    else:
+        # Default = real file name
+        if real_file_size:
+            caption = f"📁 {real_file_name}\n📦 {real_file_size}"
+        else:
+            caption = f"📁 {real_file_name}"
 
-    # Replace caption placeholders
-    file_name = "file"
-    file_size_str = ""
-    if message.document:
-        file_name = message.document.file_name or "file"
-        if message.document.file_size:
-            file_size_str = f"{round(message.document.file_size / 1024 / 1024, 2)} MB"
-    elif message.video:
-        file_name = message.video.file_name or "video"
-        if message.video.file_size:
-            file_size_str = f"{round(message.video.file_size / 1024 / 1024, 2)} MB"
-    elif message.audio:
-        file_name = message.audio.file_name or "audio"
-
-    caption = caption.replace("{file_name}", file_name)
-    caption = caption.replace("{file_size}", file_size_str)
+    # Debug
+    print(f"DEBUG: media_type={media_type}, thumb={thumb is not None}, caption={caption[:60]}, autodel={autodel_status}")
 
     # Build keyboard
     keyboard = []
@@ -285,9 +331,7 @@ async def handle_clone_link(client: Client, message: Message):
         except Exception:
             pass
 
-        # ==========================================================
-        # 🔹 AUTO DELETE
-        # ==========================================================
+        # AUTO DELETE
         if autodel_status and sent:
             try:
                 time_str = autodel_time.strip().lower()
